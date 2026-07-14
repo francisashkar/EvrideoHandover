@@ -1,0 +1,128 @@
+export type ShiftId = 'shift1' | 'shift2' | 'shift3'
+
+export interface ShiftDefinition {
+  id: ShiftId
+  label: string
+  shiftNumber: 1 | 2 | 3
+  timeRange: string
+  startHour: number
+  endHour: number
+  emoji: string
+}
+
+export const SHIFT_DEFINITIONS: ShiftDefinition[] = [
+  {
+    id: 'shift1',
+    label: 'משמרת 1 — בוקר',
+    shiftNumber: 1,
+    timeRange: '07:00 - 15:00',
+    startHour: 7,
+    endHour: 15,
+    emoji: '🌅',
+  },
+  {
+    id: 'shift2',
+    label: 'משמרת 2 — ערב',
+    shiftNumber: 2,
+    timeRange: '15:00 - 23:00',
+    startHour: 15,
+    endHour: 23,
+    emoji: '🌇',
+  },
+  {
+    id: 'shift3',
+    label: 'משמרת 3 — לילה',
+    shiftNumber: 3,
+    timeRange: '23:00 - 07:00',
+    startHour: 23,
+    endHour: 7,
+    emoji: '🌙',
+  },
+]
+
+export const SHIFT_ORDER: ShiftId[] = ['shift1', 'shift2', 'shift3']
+
+export type MessageTag = 'update' | 'incident' | 'followup'
+
+export const TAG_META: Record<MessageTag, { label: string; chip: string; ticketPrefix: string }> = {
+  update: {
+    label: 'עדכון',
+    chip: 'bg-sky-500/15 text-sky-400 ring-sky-500/30',
+    ticketPrefix: '',
+  },
+  incident: {
+    label: 'תקלה',
+    chip: 'bg-red-500/15 text-red-400 ring-red-500/30',
+    ticketPrefix: '[תקלה] ',
+  },
+  followup: {
+    label: 'מעקב',
+    chip: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
+    ticketPrefix: '[מעקב] ',
+  },
+}
+
+export interface MessageAttachment {
+  id: string
+  name: string
+  mimeType: string
+  dataUrl: string
+  size: number
+}
+
+export interface ChatMessage {
+  id: string
+  operator: string
+  text: string
+  timestamp: number
+  tag?: MessageTag
+  pinned?: boolean
+  unresolved?: boolean
+  attachments?: MessageAttachment[]
+}
+
+/** shiftId -> messages, for a single date */
+export type DayMessages = Record<ShiftId, ChatMessage[]>
+
+/** dateKey (YYYY-MM-DD) -> DayMessages */
+export type ChatStore = Record<string, DayMessages>
+
+export function createEmptyDayMessages(): DayMessages {
+  return { shift1: [], shift2: [], shift3: [] }
+}
+
+export type ShiftStatus = 'ok' | 'minor' | 'major'
+
+export const STATUS_META: Record<ShiftStatus, { label: string; dot: string; ticketLabel: string }> = {
+  ok: { label: 'תקין', dot: 'bg-emerald-500', ticketLabel: 'תקין' },
+  minor: { label: 'תקלות קלות', dot: 'bg-amber-400', ticketLabel: 'תקלות קלות' },
+  major: { label: 'תקלה חמורה', dot: 'bg-red-500', ticketLabel: 'תקלה חמורה' },
+}
+
+/** dateKey -> shiftId -> status */
+export type ShiftStatusStore = Record<string, Partial<Record<ShiftId, ShiftStatus>>>
+
+export interface CarryOverItem {
+  dateKey: string
+  shiftId: ShiftId
+  message: ChatMessage
+}
+
+export const OPERATOR_COLORS = [
+  'bg-sky-500/20 text-sky-600 ring-sky-500/30 dark:text-sky-300',
+  'bg-violet-500/20 text-violet-600 ring-violet-500/30 dark:text-violet-300',
+  'bg-emerald-500/20 text-emerald-600 ring-emerald-500/30 dark:text-emerald-300',
+  'bg-amber-500/20 text-amber-600 ring-amber-500/30 dark:text-amber-300',
+  'bg-pink-500/20 text-pink-600 ring-pink-500/30 dark:text-pink-300',
+  'bg-cyan-500/20 text-cyan-600 ring-cyan-500/30 dark:text-cyan-300',
+  'bg-orange-500/20 text-orange-600 ring-orange-500/30 dark:text-orange-300',
+  'bg-indigo-500/20 text-indigo-600 ring-indigo-500/30 dark:text-indigo-300',
+]
+
+export function colorForOperator(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  }
+  return OPERATOR_COLORS[hash % OPERATOR_COLORS.length]
+}
