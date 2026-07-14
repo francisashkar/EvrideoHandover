@@ -10,7 +10,7 @@ import Toast from './components/Toast'
 import type { ToastState } from './components/Toast'
 import DailyOverview from './components/DailyOverview'
 import TaskPanel from './components/TaskPanel'
-import StickyNotes from './components/StickyNotes'
+import TaskRail from './components/TaskRail'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
 import { useShiftStatus } from './hooks/useShiftStatus'
@@ -183,7 +183,10 @@ function App() {
         onSelect={setActiveTab}
       />
 
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 overflow-hidden">
+        <TaskRail tasks={tasks} shiftId={activeTab} onToggle={toggleTask} />
+
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2 text-sm text-noc-t3">
             <span>{activeShiftDef.emoji}</span>
@@ -228,7 +231,6 @@ function App() {
         <SearchBar query={searchQuery} onQueryChange={setSearchQuery} />
 
         <div className="relative flex flex-1 flex-col overflow-hidden">
-          <StickyNotes tasks={tasks} shiftId={activeTab} onToggle={toggleTask} />
           <ChatFeed
             messages={filteredMessages}
             hasUnfilteredMessages={activeMessages.length > 0}
@@ -256,6 +258,7 @@ function App() {
           onSend={handleSend}
           onFileError={(msg) => showToast(msg, 'error')}
         />
+        </div>
       </div>
 
       {tasksOpen && (
