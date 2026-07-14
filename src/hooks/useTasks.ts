@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  updateDoc,
+} from 'firebase/firestore'
+import type { DocumentData } from 'firebase/firestore'
+import { db, firebaseEnabled, TASKS_COLLECTION } from '../firebase'
 import type { ShiftId } from '../types'
 
 const STORAGE_KEY = 'noc-tasks'
@@ -15,6 +25,73 @@ export interface Task {
   assignee?: TaskAssignee
 }
 
+export interface TasksApi {
+  tasks: Task[]
+  addTask: (text: string, assignee?: TaskAssignee) => void
+  toggleTask: (id: string) => void
+  deleteTask: (id: string) => void
+}
+
+// ---------------------------------------------------------------------------
+// Firestore backend
+// ---------------------------------------------------------------------------
+
+function docToTask(id: string, data: DocumentData): Task {
+  return {
+    id,
+    text: (data.text as string) ?? '',
+    done: Boolean(data.done),
+    createdAt: (data.created_at as number) ?? 0,
+    assignee: (data.assignee as TaskAssignee | null) ?? undefined,
+  }
+}
+
+function useFirestoreTasks(): TasksApi {
+  const [tasks, setTasks] = useState<Task[]>([])
+
+  useEffect(() => {
+    if (!db) return
+    const unsub = onSnapshot(collection(db, TASKS_COLLECTION), (snapshot) => {
+      const next = snapshot.docs.map((d) => docToTask(d.id, d.data()))
+      next.sort((a, b) => a.createdAt - b.createdAt)
+      setTasks(next)
+    })
+    return unsub
+  }, [])
+
+  const addTask = useCallback((text: string, assignee?: TaskAssignee) => {
+    const trimmed = text.trim()
+    if (!db || !trimmed) return
+    addDoc(collection(db, TASKS_COLLECTION), {
+      text: trimmed,
+      done: false,
+      created_at: Date.now(),
+      assignee: assignee ?? null,
+    }).catch(() => {})
+  }, [])
+
+  const toggleTask = useCallback(
+    (id: string) => {
+      if (!db) return
+      const task = tasks.find((t) => t.id === id)
+      if (!task) return
+      updateDoc(doc(db, TASKS_COLLECTION, id), { done: !task.done }).catch(() => {})
+    },
+    [tasks],
+  )
+
+  const deleteTask = useCallback((id: string) => {
+    if (!db) return
+    deleteDoc(doc(db, TASKS_COLLECTION, id)).catch(() => {})
+  }, [])
+
+  return useMemo(() => ({ tasks, addTask, toggleTask, deleteTask }), [tasks, addTask, toggleTask, deleteTask])
+}
+
+// ---------------------------------------------------------------------------
+// localStorage backend (fallback)
+// ---------------------------------------------------------------------------
+
 function loadTasks(): Task[] {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
@@ -28,7 +105,7 @@ function loadTasks(): Task[] {
   return []
 }
 
-export function useTasks() {
+function useLocalTasks(): TasksApi {
   const [tasks, setTasks] = useState<Task[]>(loadTasks)
 
   useEffect(() => {
@@ -62,5 +139,12 @@ export function useTasks() {
     setTasks((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  return { tasks, addTask, toggleTask, deleteTask }
+  return useMemo(() => ({ tasks, addTask, toggleTask, deleteTask }), [tasks, addTask, toggleTask, deleteTask])
+}
+
+export function useTasks(): TasksApi {
+  // Both hooks are always called (rules of hooks); only one does real work
+  const firestoreApi = useFirestoreTasks()
+  const localApi = useLocalTasks()
+  return firebaseEnabled ? firestoreApi : localApi
 }

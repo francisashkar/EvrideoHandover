@@ -46,7 +46,7 @@ function App() {
     storageError,
   } = useChatStore(dateKey)
   const { operators, addOperator } = useOperators()
-  const { getStatus, setStatus } = useShiftStatus()
+  const { getStatus, setStatus } = useShiftStatus(dateKey)
   const { theme, toggleTheme } = useTheme()
   const { tasks, addTask, toggleTask, deleteTask } = useTasks()
 

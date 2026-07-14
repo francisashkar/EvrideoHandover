@@ -30,3 +30,6 @@ export const db: Firestore | null = firebaseEnabled
   : null
 
 export const MESSAGES_COLLECTION = 'noc_messages'
+export const TASKS_COLLECTION = 'noc_tasks'
+export const SHIFT_STATUS_COLLECTION = 'noc_shift_status'
+export const OPERATORS_COLLECTION = 'noc_operators'
