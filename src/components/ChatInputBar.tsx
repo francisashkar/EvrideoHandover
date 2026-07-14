@@ -4,7 +4,9 @@ import { Plus, Send, Paperclip, X, FileText } from 'lucide-react'
 import type { MessageAttachment, MessageTag } from '../types'
 import { TAG_META } from '../types'
 
-const MAX_FILE_BYTES = 1.5 * 1024 * 1024 // localStorage-friendly cap per file
+// Attachments are stored inline (data URLs). Firestore documents cap at 1MB,
+// so keep files comfortably under it (also friendlier to localStorage quota).
+const MAX_FILE_BYTES = 700 * 1024
 const MAX_FILES = 5
 const MAX_TEXTAREA_HEIGHT = 160
 
@@ -96,7 +98,7 @@ export default function ChatInputBar({
         break
       }
       if (file.size > MAX_FILE_BYTES) {
-        onFileError(`הקובץ "${file.name}" גדול מדי (מקסימום 1.5MB)`)
+        onFileError(`הקובץ "${file.name}" גדול מדי (מקסימום 700KB)`)
         continue
       }
       try {

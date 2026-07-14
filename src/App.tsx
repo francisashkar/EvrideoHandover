@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ticket } from 'lucide-react'
+import { Ticket, CloudOff } from 'lucide-react'
 import Header from './components/Header'
 import ShiftTabs from './components/ShiftTabs'
 import ShiftStatsBar from './components/ShiftStatsBar'
@@ -10,11 +10,13 @@ import Toast from './components/Toast'
 import type { ToastState } from './components/Toast'
 import DailyOverview from './components/DailyOverview'
 import TaskPanel from './components/TaskPanel'
+import StickyNotes from './components/StickyNotes'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
 import { useShiftStatus } from './hooks/useShiftStatus'
 import { useTasks } from './hooks/useTasks'
 import { useTheme } from './hooks/useTheme'
+import { firebaseEnabled } from './firebase'
 import { SHIFT_DEFINITIONS, STATUS_META } from './types'
 import type { CarryOverItem, MessageAttachment, MessageTag, ShiftId, ShiftStatus } from './types'
 import { getActiveShiftId, todayKey } from './dateUtils'
@@ -42,7 +44,7 @@ function App() {
     mergeWithPrevious,
     getCarryOver,
     storageError,
-  } = useChatStore()
+  } = useChatStore(dateKey)
   const { operators, addOperator } = useOperators()
   const { getStatus, setStatus } = useShiftStatus()
   const { theme, toggleTheme } = useTheme()
@@ -68,7 +70,12 @@ function App() {
   }, [activeTab, dateKey])
 
   useEffect(() => {
-    if (storageError) showToast('האחסון המקומי מלא — מחקו הודעות או קבצים ישנים', 'error')
+    if (storageError) {
+      showToast(
+        firebaseEnabled ? 'שגיאה בשמירה לענן — בדקו את החיבור' : 'האחסון המקומי מלא — מחקו הודעות או קבצים ישנים',
+        'error',
+      )
+    }
   }, [storageError])
 
   const isToday = dateKey === todayKey()
@@ -153,6 +160,21 @@ function App() {
         tasksOpen={tasksOpen}
         openTaskCount={tasks.filter((t) => !t.done).length}
       />
+
+      {!firebaseEnabled && (
+        <div className="flex items-center justify-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          <CloudOff className="h-3.5 w-3.5" />
+          מצב מקומי — Firebase לא מוגדר, ההודעות נשמרות בדפדפן זה בלבד
+        </div>
+      )}
+
+      {firebaseEnabled && storageError && (
+        <div className="flex items-center justify-center gap-2 border-b border-red-500/30 bg-red-500/10 px-4 py-1.5 text-[11px] font-medium text-red-600 dark:text-red-400">
+          <CloudOff className="h-3.5 w-3.5" />
+          אין גישה ל-Firestore — בדקו את חוקי האבטחה (Rules) בקונסולת Firebase
+        </div>
+      )}
+
       <ShiftTabs
         activeTab={activeTab}
         liveShiftId={liveShiftId}
@@ -161,25 +183,7 @@ function App() {
         onSelect={setActiveTab}
       />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-1 overflow-hidden">
-        {tasksOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
-              onClick={() => setTasksOpen(false)}
-            />
-            <TaskPanel
-              tasks={tasks}
-              operators={operators}
-              onAdd={addTask}
-              onToggle={toggleTask}
-              onDelete={deleteTask}
-              onClose={() => setTasksOpen(false)}
-            />
-          </>
-        )}
-
-        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2 text-sm text-noc-t3">
             <span>{activeShiftDef.emoji}</span>
@@ -223,23 +227,26 @@ function App() {
         <ShiftStatsBar messages={activeMessages} />
         <SearchBar query={searchQuery} onQueryChange={setSearchQuery} />
 
-        <ChatFeed
-          messages={filteredMessages}
-          hasUnfilteredMessages={activeMessages.length > 0}
-          carryOver={carryOver}
-          mergeableIds={mergeableIds}
-          onDeleteMessage={(id) => deleteMessage(dateKey, activeTab, id)}
-          onTogglePin={(id) => {
-            const m = activeMessages.find((x) => x.id === id)
-            updateMessage(dateKey, activeTab, id, { pinned: !m?.pinned })
-          }}
-          onToggleUnresolved={(id) => {
-            const m = activeMessages.find((x) => x.id === id)
-            updateMessage(dateKey, activeTab, id, { unresolved: !m?.unresolved })
-          }}
-          onMergeMessage={(id) => mergeWithPrevious(dateKey, activeTab, id)}
-          onResolveCarryOver={handleResolveCarryOver}
-        />
+        <div className="relative flex flex-1 flex-col overflow-hidden">
+          <StickyNotes tasks={tasks} shiftId={activeTab} onToggle={toggleTask} />
+          <ChatFeed
+            messages={filteredMessages}
+            hasUnfilteredMessages={activeMessages.length > 0}
+            carryOver={carryOver}
+            mergeableIds={mergeableIds}
+            onDeleteMessage={(id) => deleteMessage(dateKey, activeTab, id)}
+            onTogglePin={(id) => {
+              const m = activeMessages.find((x) => x.id === id)
+              updateMessage(dateKey, activeTab, id, { pinned: !m?.pinned })
+            }}
+            onToggleUnresolved={(id) => {
+              const m = activeMessages.find((x) => x.id === id)
+              updateMessage(dateKey, activeTab, id, { unresolved: !m?.unresolved })
+            }}
+            onMergeMessage={(id) => mergeWithPrevious(dateKey, activeTab, id)}
+            onResolveCarryOver={handleResolveCarryOver}
+          />
+        </div>
 
         <ChatInputBar
           operators={operators}
@@ -249,8 +256,18 @@ function App() {
           onSend={handleSend}
           onFileError={(msg) => showToast(msg, 'error')}
         />
-        </div>
       </div>
+
+      {tasksOpen && (
+        <TaskPanel
+          tasks={tasks}
+          operators={operators}
+          onAdd={addTask}
+          onToggle={toggleTask}
+          onDelete={deleteTask}
+          onClose={() => setTasksOpen(false)}
+        />
+      )}
 
       <DailyOverview
         open={overviewOpen}

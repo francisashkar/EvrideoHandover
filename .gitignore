@@ -9,6 +9,11 @@ dist
 dist-ssr
 *.local
 
+# Environment (contains Firebase keys)
+.env
+.env.*
+!.env.example
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

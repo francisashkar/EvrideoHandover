@@ -1,14 +1,18 @@
-import { useState } from 'react'
-import type { KeyboardEvent } from 'react'
-import { ListTodo, Plus, Trash2, X, User, Users } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { ListTodo, Plus, Trash2, X, User, Users, Lock, LockOpen, GripHorizontal } from 'lucide-react'
 import type { Task, TaskAssignee } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
 
-const SHIFT_SHORT_LABELS: Record<ShiftId, string> = {
+export const SHIFT_SHORT_LABELS: Record<ShiftId, string> = {
   shift1: 'משמרת בוקר',
   shift2: 'משמרת ערב',
   shift3: 'משמרת לילה',
 }
+
+const PANEL_WIDTH = 320
+const POS_KEY = 'noc-task-panel-pos'
+const LOCK_KEY = 'noc-task-panel-locked'
 
 interface TaskPanelProps {
   tasks: Task[]
@@ -25,9 +29,72 @@ function parseAssignee(value: string): TaskAssignee | undefined {
   return undefined
 }
 
+function loadPos(): { x: number; y: number } {
+  try {
+    const stored = window.localStorage.getItem(POS_KEY)
+    if (stored) {
+      const p = JSON.parse(stored) as { x: number; y: number }
+      if (typeof p.x === 'number' && typeof p.y === 'number') return p
+    }
+  } catch {
+    // fall through
+  }
+  return { x: 24, y: 140 }
+}
+
+function clampPos(x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - PANEL_WIDTH)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - 120)),
+  }
+}
+
 export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete, onClose }: TaskPanelProps) {
   const [text, setText] = useState('')
   const [assigneeValue, setAssigneeValue] = useState('')
+  const [pos, setPos] = useState(loadPos)
+  const [locked, setLocked] = useState(() => {
+    try {
+      return window.localStorage.getItem(LOCK_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const dragState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(POS_KEY, JSON.stringify(pos))
+    } catch {
+      // ignore
+    }
+  }, [pos])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LOCK_KEY, String(locked))
+    } catch {
+      // ignore
+    }
+  }, [locked])
+
+  const handleDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (locked) return
+    // don't start a drag from the header buttons
+    if ((e.target as HTMLElement).closest('button')) return
+    dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handleDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = dragState.current
+    if (!d) return
+    setPos(clampPos(d.origX + (e.clientX - d.startX), d.origY + (e.clientY - d.startY)))
+  }
+
+  const handleDragEnd = () => {
+    dragState.current = null
+  }
 
   const handleAdd = () => {
     if (!text.trim()) return
@@ -47,8 +114,19 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
   const done = tasks.filter((t) => t.done)
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-e border-noc-border bg-noc-panel max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-50 max-lg:shadow-2xl">
-      <div className="flex items-center justify-between border-b border-noc-border px-4 py-3">
+    <div
+      className="fixed z-40 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-2xl border border-noc-border bg-noc-panel shadow-2xl shadow-black/40"
+      style={{ left: pos.x, top: pos.y }}
+    >
+      <div
+        onPointerDown={handleDragStart}
+        onPointerMove={handleDragMove}
+        onPointerUp={handleDragEnd}
+        onPointerCancel={handleDragEnd}
+        className={`flex touch-none items-center justify-between border-b border-noc-border bg-noc-panel2 px-4 py-3 ${
+          locked ? '' : 'cursor-move'
+        }`}
+      >
         <h2 className="flex items-center gap-2 text-sm font-bold text-noc-t1">
           <ListTodo className="h-4 w-4 text-noc-accent" />
           משימות
@@ -58,12 +136,25 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
             </span>
           )}
         </h2>
-        <button
-          onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-noc-t3 hover:bg-noc-panel2 hover:text-noc-t1 lg:hidden"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {!locked && <GripHorizontal className="h-4 w-4 text-noc-t4" />}
+          <button
+            onClick={() => setLocked((v) => !v)}
+            title={locked ? 'שחרור נעילה (אפשר גרירה)' : 'נעילת מיקום'}
+            className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
+              locked ? 'text-noc-accent' : 'text-noc-t3 hover:text-noc-t1'
+            } hover:bg-noc-panel3`}
+          >
+            {locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            onClick={onClose}
+            title="סגירה"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-noc-t3 hover:bg-noc-panel3 hover:text-noc-t1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-1.5 border-b border-noc-border p-3">
@@ -126,7 +217,7 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
           </div>
         )}
       </div>
-    </aside>
+    </div>
   )
 }
 
