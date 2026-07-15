@@ -1,6 +1,9 @@
 import { initializeApp } from 'firebase/app'
+import type { FirebaseApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import type { Firestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
+import type { FirebaseStorage } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -16,18 +19,26 @@ export const firebaseEnabled = Boolean(
   firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId,
 )
 
-export const db: Firestore | null = firebaseEnabled
-  ? getFirestore(
-      initializeApp({
-        apiKey: firebaseConfig.apiKey!,
-        authDomain: firebaseConfig.authDomain,
-        projectId: firebaseConfig.projectId!,
-        storageBucket: firebaseConfig.storageBucket,
-        messagingSenderId: firebaseConfig.messagingSenderId,
-        appId: firebaseConfig.appId!,
-      }),
-    )
+const app: FirebaseApp | null = firebaseEnabled
+  ? initializeApp({
+      apiKey: firebaseConfig.apiKey!,
+      authDomain: firebaseConfig.authDomain,
+      projectId: firebaseConfig.projectId!,
+      storageBucket: firebaseConfig.storageBucket,
+      messagingSenderId: firebaseConfig.messagingSenderId,
+      appId: firebaseConfig.appId!,
+    })
   : null
+
+export const db: Firestore | null = app ? getFirestore(app) : null
+export const storage: FirebaseStorage | null = app ? getStorage(app) : null
+
+// Fail fast instead of the SDK's default multi-minute retry loop, so the UI
+// can tell the user quickly when Storage isn't provisioned or rules deny access
+if (storage) {
+  storage.maxUploadRetryTime = 15_000
+  storage.maxOperationRetryTime = 10_000
+}
 
 export const MESSAGES_COLLECTION = 'noc_messages'
 export const TASKS_COLLECTION = 'noc_tasks'

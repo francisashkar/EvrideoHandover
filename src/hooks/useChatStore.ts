@@ -72,6 +72,7 @@ function docToMessage(id: string, data: DocumentData): ChatMessage {
     tag: data.tag ?? 'update',
     pinned: Boolean(data.pinned),
     unresolved: Boolean(data.unresolved),
+    edited: Boolean(data.edited),
     attachments: Array.isArray(data.attachments) && data.attachments.length > 0 ? data.attachments : undefined,
   }
 }
@@ -98,6 +99,7 @@ function patchToDocFields(patch: Partial<ChatMessage>) {
   if (patch.tag !== undefined) fields.tag = patch.tag
   if (patch.pinned !== undefined) fields.pinned = patch.pinned
   if (patch.unresolved !== undefined) fields.unresolved = patch.unresolved
+  if (patch.edited !== undefined) fields.edited = patch.edited
   if (patch.attachments !== undefined) fields.attachments = patch.attachments ?? []
   return fields
 }

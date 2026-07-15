@@ -66,8 +66,15 @@ export interface MessageAttachment {
   id: string
   name: string
   mimeType: string
-  dataUrl: string
   size: number
+  /** Inline base64 content — used in localStorage fallback mode (small files) */
+  dataUrl?: string
+  /** Firebase Storage download URL — used when Firebase is configured */
+  url?: string
+}
+
+export function attachmentSrc(a: MessageAttachment): string {
+  return a.url ?? a.dataUrl ?? ''
 }
 
 export interface ChatMessage {
@@ -78,6 +85,7 @@ export interface ChatMessage {
   tag?: MessageTag
   pinned?: boolean
   unresolved?: boolean
+  edited?: boolean
   attachments?: MessageAttachment[]
 }
 

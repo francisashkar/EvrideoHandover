@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { ListTodo, Plus, Trash2, X, User, Users, Lock, LockOpen, GripHorizontal } from 'lucide-react'
-import type { Task, TaskAssignee } from '../hooks/useTasks'
+import {
+  ListTodo,
+  Plus,
+  Trash2,
+  X,
+  User,
+  Users,
+  Lock,
+  LockOpen,
+  GripHorizontal,
+  CalendarDays,
+} from 'lucide-react'
+import type { NewTaskInput, Task, TaskAssignee } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
+import { formatDateShort } from '../dateUtils'
 
 export const SHIFT_SHORT_LABELS: Record<ShiftId, string> = {
   shift1: 'משמרת בוקר',
@@ -17,7 +29,9 @@ const LOCK_KEY = 'noc-task-panel-locked'
 interface TaskPanelProps {
   tasks: Task[]
   operators: string[]
-  onAdd: (text: string, assignee?: TaskAssignee) => void
+  /** The date currently selected in the app — used as the default task date */
+  currentDateKey: string
+  onAdd: (input: NewTaskInput) => void
   onToggle: (id: string) => void
   onDelete: (id: string) => void
   onClose: () => void
@@ -49,8 +63,18 @@ function clampPos(x: number, y: number): { x: number; y: number } {
   }
 }
 
-export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete, onClose }: TaskPanelProps) {
+export default function TaskPanel({
+  tasks,
+  operators,
+  currentDateKey,
+  onAdd,
+  onToggle,
+  onDelete,
+  onClose,
+}: TaskPanelProps) {
   const [text, setText] = useState('')
+  const [description, setDescription] = useState('')
+  const [taskDate, setTaskDate] = useState(currentDateKey)
   const [assigneeValue, setAssigneeValue] = useState('')
   const [pos, setPos] = useState(loadPos)
   const [locked, setLocked] = useState(() => {
@@ -61,6 +85,11 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
     }
   })
   const dragState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+
+  // Follow the app's selected date as the default for new tasks
+  useEffect(() => {
+    setTaskDate(currentDateKey)
+  }, [currentDateKey])
 
   useEffect(() => {
     try {
@@ -80,7 +109,6 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
 
   const handleDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (locked) return
-    // don't start a drag from the header buttons
     if ((e.target as HTMLElement).closest('button')) return
     dragState.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -98,13 +126,20 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
 
   const handleAdd = () => {
     if (!text.trim()) return
-    onAdd(text, parseAssignee(assigneeValue))
+    onAdd({
+      text,
+      description: description.trim() || undefined,
+      date: taskDate || undefined,
+      assignee: parseAssignee(assigneeValue),
+    })
     setText('')
+    setDescription('')
+    setTaskDate(currentDateKey)
     setAssigneeValue('')
   }
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleAdd()
     }
@@ -115,7 +150,7 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
 
   return (
     <div
-      className="fixed z-40 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-2xl border border-noc-border bg-noc-panel shadow-2xl shadow-black/40"
+      className="fixed z-40 flex max-h-[75vh] w-80 flex-col overflow-hidden rounded-2xl border border-noc-border bg-noc-panel shadow-2xl shadow-black/40"
       style={{ left: pos.x, top: pos.y }}
     >
       <div
@@ -164,7 +199,7 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="משימה חדשה..."
+            placeholder="כותרת המשימה..."
             className="h-9 min-w-0 flex-1 rounded-lg border border-noc-border bg-noc-panel2 px-2.5 text-sm text-noc-t1 placeholder-noc-t4 outline-none focus:border-noc-accent"
           />
           <button
@@ -175,27 +210,49 @@ export default function TaskPanel({ tasks, operators, onAdd, onToggle, onDelete,
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <select
-          value={assigneeValue}
-          onChange={(e) => setAssigneeValue(e.target.value)}
-          className="h-8 w-full rounded-lg border border-noc-border bg-noc-panel2 px-2 text-xs text-noc-t2 outline-none focus:border-noc-accent"
-        >
-          <option value="">שיוך: כללי</option>
-          <optgroup label="משמרת שלמה">
-            {(Object.keys(SHIFT_SHORT_LABELS) as ShiftId[]).map((sid) => (
-              <option key={sid} value={`shift:${sid}`}>
-                {SHIFT_SHORT_LABELS[sid]}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="נוקיסט">
-            {operators.map((name) => (
-              <option key={name} value={`op:${name}`}>
-                {name}
-              </option>
-            ))}
-          </optgroup>
-        </select>
+
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="תיאור (אופציונלי)..."
+          rows={2}
+          className="w-full rounded-lg border border-noc-border bg-noc-panel2 px-2.5 py-1.5 text-xs leading-relaxed text-noc-t1 placeholder-noc-t4 outline-none focus:border-noc-accent"
+          style={{ resize: 'none' }}
+        />
+
+        <div className="flex gap-1.5">
+          <div className="flex h-8 flex-1 items-center gap-1.5 rounded-lg border border-noc-border bg-noc-panel2 px-2">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-noc-accent2" />
+            <input
+              type="date"
+              value={taskDate}
+              onChange={(e) => setTaskDate(e.target.value)}
+              title="תאריך המשימה (ריק = כל יום)"
+              className="w-full bg-transparent text-xs text-noc-t2 outline-none"
+            />
+          </div>
+          <select
+            value={assigneeValue}
+            onChange={(e) => setAssigneeValue(e.target.value)}
+            className="h-8 flex-1 rounded-lg border border-noc-border bg-noc-panel2 px-2 text-xs text-noc-t2 outline-none focus:border-noc-accent"
+          >
+            <option value="">שיוך: כללי</option>
+            <optgroup label="משמרת שלמה">
+              {(Object.keys(SHIFT_SHORT_LABELS) as ShiftId[]).map((sid) => (
+                <option key={sid} value={`shift:${sid}`}>
+                  {SHIFT_SHORT_LABELS[sid]}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="נוקיסט">
+              {operators.map((name) => (
+                <option key={name} value={`op:${name}`}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 scrollbar-thin">
@@ -257,13 +314,26 @@ function TaskRow({
       />
       <div className="min-w-0 flex-1 space-y-1">
         <p
-          className={`break-words text-xs leading-relaxed ${
+          className={`break-words text-xs font-semibold leading-relaxed ${
             task.done ? 'text-noc-t4 line-through' : 'text-noc-t1'
           }`}
         >
           {task.text}
         </p>
-        {task.assignee && <AssigneeChip assignee={task.assignee} />}
+        {task.description && (
+          <p className={`break-words text-[11px] leading-relaxed ${task.done ? 'text-noc-t4' : 'text-noc-t3'}`}>
+            {task.description}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-1">
+          {task.date && (
+            <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-600 ring-1 ring-sky-500/30 dark:text-sky-300">
+              <CalendarDays className="h-2.5 w-2.5" />
+              {formatDateShort(task.date)}
+            </span>
+          )}
+          {task.assignee && <AssigneeChip assignee={task.assignee} />}
+        </div>
       </div>
       <button
         onClick={() => onDelete(task.id)}

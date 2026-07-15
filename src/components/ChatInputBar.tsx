@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
-import { Plus, Send, Paperclip, X, FileText } from 'lucide-react'
+import { Plus, Send, Paperclip, X, FileText, Loader2 } from 'lucide-react'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { firebaseEnabled, storage } from '../firebase'
 import type { MessageAttachment, MessageTag } from '../types'
-import { TAG_META } from '../types'
+import { TAG_META, attachmentSrc } from '../types'
 
-// Attachments are stored inline (data URLs). Firestore documents cap at 1MB,
-// so keep files comfortably under it (also friendlier to localStorage quota).
-const MAX_FILE_BYTES = 700 * 1024
+// With Firebase, files go to Cloud Storage (only a link is kept in the message) — 10MB cap.
+// In localStorage fallback mode they're stored inline as data URLs, so keep them small.
+const MAX_FILE_BYTES = firebaseEnabled ? 10 * 1024 * 1024 : 700 * 1024
+const MAX_FILE_LABEL = firebaseEnabled ? '10MB' : '700KB'
 const MAX_FILES = 5
 const MAX_TEXTAREA_HEIGHT = 160
 
@@ -46,6 +49,7 @@ export default function ChatInputBar({
   const [text, setText] = useState('')
   const [tag, setTag] = useState<MessageTag>('update')
   const [attachments, setAttachments] = useState<MessageAttachment[]>([])
+  const [uploadingCount, setUploadingCount] = useState(0)
   const [addingOperator, setAddingOperator] = useState(false)
   const [newOperatorName, setNewOperatorName] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -71,7 +75,7 @@ export default function ChatInputBar({
     if (addingOperator) newOperatorInputRef.current?.focus()
   }, [addingOperator])
 
-  const canSend = text.trim().length > 0 || attachments.length > 0
+  const canSend = (text.trim().length > 0 || attachments.length > 0) && uploadingCount === 0
 
   const handleSend = () => {
     if (!canSend) return
@@ -98,27 +102,38 @@ export default function ChatInputBar({
         break
       }
       if (file.size > MAX_FILE_BYTES) {
-        onFileError(`הקובץ "${file.name}" גדול מדי (מקסימום 700KB)`)
+        onFileError(`הקובץ "${file.name}" גדול מדי (מקסימום ${MAX_FILE_LABEL})`)
         continue
       }
-      try {
-        const dataUrl = await readFileAsDataUrl(file)
-        setAttachments((prev) =>
-          prev.length >= MAX_FILES
-            ? prev
-            : [
-                ...prev,
-                {
-                  id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-                  name: file.name,
-                  mimeType: file.type || 'application/octet-stream',
-                  dataUrl,
-                  size: file.size,
-                },
-              ],
-        )
-      } catch {
-        onFileError(`לא ניתן לקרוא את הקובץ "${file.name}"`)
+
+      const base = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+      }
+
+      if (storage) {
+        // Firebase mode: upload to Cloud Storage, keep only the download URL
+        setUploadingCount((c) => c + 1)
+        try {
+          const storageRef = ref(storage, `attachments/${base.id}-${file.name}`)
+          await uploadBytes(storageRef, file)
+          const url = await getDownloadURL(storageRef)
+          setAttachments((prev) => (prev.length >= MAX_FILES ? prev : [...prev, { ...base, url }]))
+        } catch {
+          onFileError(`העלאת "${file.name}" נכשלה — ודאו ש-Storage מופעל בקונסולת Firebase`)
+        } finally {
+          setUploadingCount((c) => c - 1)
+        }
+      } else {
+        // Fallback mode: inline data URL in localStorage
+        try {
+          const dataUrl = await readFileAsDataUrl(file)
+          setAttachments((prev) => (prev.length >= MAX_FILES ? prev : [...prev, { ...base, dataUrl }]))
+        } catch {
+          onFileError(`לא ניתן לקרוא את הקובץ "${file.name}"`)
+        }
       }
     }
   }
@@ -208,7 +223,7 @@ export default function ChatInputBar({
             className="flex items-center gap-1.5 rounded-full border border-noc-border bg-noc-panel2 py-1 pe-1 ps-2 text-[11px] text-noc-t2"
           >
             {a.mimeType.startsWith('image/') ? (
-              <img src={a.dataUrl} alt={a.name} className="h-5 w-5 rounded object-cover" />
+              <img src={attachmentSrc(a)} alt={a.name} className="h-5 w-5 rounded object-cover" />
             ) : (
               <FileText className="h-3.5 w-3.5 text-noc-accent2" />
             )}
@@ -222,6 +237,13 @@ export default function ChatInputBar({
             </button>
           </span>
         ))}
+
+        {uploadingCount > 0 && (
+          <span className="flex items-center gap-1.5 rounded-full border border-noc-accent/40 bg-noc-accent/10 px-2.5 py-1 text-[11px] font-medium text-noc-accent">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            מעלה {uploadingCount} {uploadingCount === 1 ? 'קובץ' : 'קבצים'}...
+          </span>
+        )}
       </div>
 
       <div className="flex items-end gap-2">

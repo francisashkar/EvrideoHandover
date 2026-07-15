@@ -1,76 +1,76 @@
 {
   "running": true,
-  "startedAt": "2026-07-14T17:07:54.950Z",
+  "startedAt": "2026-07-15T21:44:45.505Z",
   "workers": {
     "map": {
-      "runCount": 28,
-      "successCount": 28,
+      "runCount": 50,
+      "successCount": 50,
       "failureCount": 0,
-      "averageDurationMs": 4.142857142857144,
-      "isRunning": false,
-      "nextRun": "2026-07-15T00:07:55.363Z",
-      "lastStartedAt": "2026-07-14T23:52:55.359Z",
-      "lastRun": "2026-07-14T23:52:55.361Z"
+      "averageDurationMs": 3.6200000000000006,
+      "lastRun": "2026-07-15T21:44:45.514Z",
+      "lastStartedAt": "2026-07-15T21:44:45.511Z",
+      "nextRun": "2026-07-15T21:59:45.516Z",
+      "isRunning": false
     },
     "audit": {
-      "runCount": 42,
-      "successCount": 42,
+      "runCount": 73,
+      "successCount": 73,
       "failureCount": 0,
-      "averageDurationMs": 3,
-      "isRunning": false,
-      "nextRun": "2026-07-14T23:59:55.504Z",
-      "lastStartedAt": "2026-07-14T23:59:55.509Z",
-      "lastRun": "2026-07-14T23:59:55.512Z"
+      "averageDurationMs": 2.863013698630137,
+      "lastRun": "2026-07-15T21:46:45.523Z",
+      "lastStartedAt": "2026-07-15T21:46:45.520Z",
+      "nextRun": "2026-07-15T21:56:45.525Z",
+      "isRunning": false
     },
     "optimize": {
-      "runCount": 28,
-      "successCount": 28,
+      "runCount": 49,
+      "successCount": 49,
       "failureCount": 0,
-      "averageDurationMs": 2.9285714285714284,
-      "isRunning": false,
-      "nextRun": "2026-07-15T00:11:55.313Z",
-      "lastStartedAt": "2026-07-14T23:56:55.309Z",
-      "lastRun": "2026-07-14T23:56:55.312Z"
+      "averageDurationMs": 2.938775510204082,
+      "lastRun": "2026-07-15T21:48:45.522Z",
+      "lastStartedAt": "2026-07-15T21:48:45.517Z",
+      "nextRun": "2026-07-15T22:03:45.524Z",
+      "isRunning": false
     },
     "consolidate": {
-      "runCount": 14,
-      "successCount": 14,
+      "runCount": 25,
+      "successCount": 25,
       "failureCount": 0,
-      "averageDurationMs": 7.071428571428571,
-      "isRunning": false,
-      "nextRun": "2026-07-15T00:13:55.164Z",
-      "lastStartedAt": "2026-07-14T23:43:55.160Z",
-      "lastRun": "2026-07-14T23:43:55.162Z"
+      "averageDurationMs": 5.36,
+      "lastRun": "2026-07-15T21:50:45.516Z",
+      "lastStartedAt": "2026-07-15T21:50:45.510Z",
+      "nextRun": "2026-07-15T22:20:45.518Z",
+      "isRunning": false
     },
     "testgaps": {
-      "runCount": 21,
-      "successCount": 21,
+      "runCount": 37,
+      "successCount": 37,
       "failureCount": 0,
-      "averageDurationMs": 3.2857142857142856,
-      "isRunning": false,
-      "nextRun": "2026-07-15T00:15:55.217Z",
-      "lastStartedAt": "2026-07-14T23:55:55.213Z",
-      "lastRun": "2026-07-14T23:55:55.215Z"
+      "averageDurationMs": 3.027027027027027,
+      "lastRun": "2026-07-15T21:52:45.513Z",
+      "lastStartedAt": "2026-07-15T21:52:45.508Z",
+      "nextRun": "2026-07-15T21:52:45.507Z",
+      "isRunning": false
     },
     "backup": {
       "runCount": 1,
       "successCount": 1,
       "failureCount": 0,
       "averageDurationMs": 4,
-      "isRunning": false,
-      "nextRun": "2026-07-15T17:17:54.970Z",
+      "lastRun": "2026-07-14T17:17:54.968Z",
       "lastStartedAt": "2026-07-14T17:17:54.964Z",
-      "lastRun": "2026-07-14T17:17:54.968Z"
+      "nextRun": "2026-07-15T21:54:45.508Z",
+      "isRunning": false
     },
     "harness": {
       "runCount": 2,
       "successCount": 2,
       "failureCount": 0,
       "averageDurationMs": 26,
-      "isRunning": false,
-      "nextRun": "2026-07-15T05:19:55.033Z",
+      "lastRun": "2026-07-14T23:19:55.031Z",
       "lastStartedAt": "2026-07-14T23:19:55.001Z",
-      "lastRun": "2026-07-14T23:19:55.031Z"
+      "nextRun": "2026-07-15T21:56:45.508Z",
+      "isRunning": false
     },
     "predict": {
       "runCount": 0,
@@ -89,8 +89,8 @@
   },
   "config": {
     "autoStart": false,
-    "logDir": "C:\\Users\\Ashka\\Downloads\\EvrideoHandover\\.claude-flow\\logs",
-    "stateFile": "C:\\Users\\Ashka\\Downloads\\EvrideoHandover\\.claude-flow\\daemon-state.json",
+    "logDir": "c:\\Users\\Ashka\\Downloads\\EvrideoHandover\\.claude-flow\\logs",
+    "stateFile": "c:\\Users\\Ashka\\Downloads\\EvrideoHandover\\.claude-flow\\daemon-state.json",
     "maxConcurrent": 2,
     "workerTimeoutMs": 960000,
     "resourceThresholds": {
@@ -175,5 +175,5 @@
       }
     ]
   },
-  "savedAt": "2026-07-14T23:59:55.513Z"
+  "savedAt": "2026-07-15T21:52:45.514Z"
 }

@@ -184,7 +184,7 @@ function App() {
       />
 
       <div className="flex w-full flex-1 overflow-hidden">
-        <TaskRail tasks={tasks} shiftId={activeTab} onToggle={toggleTask} />
+        <TaskRail tasks={tasks} shiftId={activeTab} dateKey={dateKey} onToggle={toggleTask} />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6">
@@ -252,6 +252,10 @@ function App() {
               const ok = await copyToClipboard(m.text)
               if (ok) showToast('ההודעה הועתקה!')
             }}
+            onEditMessage={(id, newText) => {
+              updateMessage(dateKey, activeTab, id, { text: newText, edited: true })
+              showToast('ההודעה עודכנה')
+            }}
             onResolveCarryOver={handleResolveCarryOver}
           />
         </div>
@@ -271,6 +275,7 @@ function App() {
         <TaskPanel
           tasks={tasks}
           operators={operators}
+          currentDateKey={dateKey}
           onAdd={addTask}
           onToggle={toggleTask}
           onDelete={deleteTask}

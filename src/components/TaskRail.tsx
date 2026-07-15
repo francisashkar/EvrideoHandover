@@ -1,11 +1,13 @@
-import { Check, ListTodo, User, Users } from 'lucide-react'
+import { CalendarDays, Check, ListTodo, User, Users } from 'lucide-react'
 import type { Task } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
 import { SHIFT_SHORT_LABELS } from './TaskPanel'
+import { formatDateShort } from '../dateUtils'
 
 interface TaskRailProps {
   tasks: Task[]
   shiftId: ShiftId
+  dateKey: string
   onToggle: (id: string) => void
 }
 
@@ -13,12 +15,18 @@ const ROTATIONS = ['-rotate-1', 'rotate-1', '-rotate-2', 'rotate-2']
 
 /**
  * Fixed rail on the right side of the page showing open tasks as sticky notes.
- * Shift-assigned tasks appear only on their shift's tab; general and
- * operator-assigned tasks appear on every tab.
+ * A task shows only when BOTH match:
+ * - shift: shift-assigned tasks appear only on their shift's tab
+ *   (general / operator tasks appear on every tab)
+ * - date: dated tasks appear only on their scheduled date
+ *   (undated tasks appear every day)
  */
-export default function TaskRail({ tasks, shiftId, onToggle }: TaskRailProps) {
+export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRailProps) {
   const notes = tasks.filter(
-    (t) => !t.done && (t.assignee?.kind !== 'shift' || t.assignee.shiftId === shiftId),
+    (t) =>
+      !t.done &&
+      (t.assignee?.kind !== 'shift' || t.assignee.shiftId === shiftId) &&
+      (!t.date || t.date === dateKey),
   )
 
   return (
@@ -43,7 +51,15 @@ export default function TaskRail({ tasks, shiftId, onToggle }: TaskRailProps) {
               className={`${ROTATIONS[i % ROTATIONS.length]} rounded-sm bg-yellow-200 p-2.5 text-slate-900 shadow-lg shadow-black/30 transition-transform hover:rotate-0`}
             >
               <div className="mb-1.5 flex items-center justify-between gap-1">
-                <TaskChip task={task} />
+                <div className="flex flex-wrap items-center gap-1">
+                  <TaskChip task={task} />
+                  {task.date && (
+                    <span className="flex items-center gap-1 rounded-full bg-yellow-300/80 px-1.5 py-0.5 text-[9px] font-bold text-yellow-900">
+                      <CalendarDays className="h-2.5 w-2.5" />
+                      {formatDateShort(task.date)}
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={() => onToggle(task.id)}
                   title="סימון כבוצע"
@@ -52,7 +68,12 @@ export default function TaskRail({ tasks, shiftId, onToggle }: TaskRailProps) {
                   <Check className="h-3 w-3" />
                 </button>
               </div>
-              <p className="break-words text-[11px] font-medium leading-relaxed">{task.text}</p>
+              <p className="break-words text-[11px] font-bold leading-relaxed">{task.text}</p>
+              {task.description && (
+                <p className="mt-0.5 break-words text-[10px] leading-relaxed text-slate-700">
+                  {task.description}
+                </p>
+              )}
             </div>
           ))
         )}

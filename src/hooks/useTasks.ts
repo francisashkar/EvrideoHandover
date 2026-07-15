@@ -20,14 +20,24 @@ export type TaskAssignee =
 export interface Task {
   id: string
   text: string
+  description?: string
+  /** YYYY-MM-DD — when set, the task belongs to that date only; empty = every day */
+  date?: string
   done: boolean
   createdAt: number
   assignee?: TaskAssignee
 }
 
+export interface NewTaskInput {
+  text: string
+  description?: string
+  date?: string
+  assignee?: TaskAssignee
+}
+
 export interface TasksApi {
   tasks: Task[]
-  addTask: (text: string, assignee?: TaskAssignee) => void
+  addTask: (input: NewTaskInput) => void
   toggleTask: (id: string) => void
   deleteTask: (id: string) => void
 }
@@ -40,6 +50,8 @@ function docToTask(id: string, data: DocumentData): Task {
   return {
     id,
     text: (data.text as string) ?? '',
+    description: (data.description as string) || undefined,
+    date: (data.date as string) || undefined,
     done: Boolean(data.done),
     createdAt: (data.created_at as number) ?? 0,
     assignee: (data.assignee as TaskAssignee | null) ?? undefined,
@@ -59,14 +71,16 @@ function useFirestoreTasks(): TasksApi {
     return unsub
   }, [])
 
-  const addTask = useCallback((text: string, assignee?: TaskAssignee) => {
-    const trimmed = text.trim()
+  const addTask = useCallback((input: NewTaskInput) => {
+    const trimmed = input.text.trim()
     if (!db || !trimmed) return
     addDoc(collection(db, TASKS_COLLECTION), {
       text: trimmed,
+      description: input.description?.trim() || null,
+      date: input.date || null,
       done: false,
       created_at: Date.now(),
-      assignee: assignee ?? null,
+      assignee: input.assignee ?? null,
     }).catch(() => {})
   }, [])
 
@@ -116,17 +130,19 @@ function useLocalTasks(): TasksApi {
     }
   }, [tasks])
 
-  const addTask = useCallback((text: string, assignee?: TaskAssignee) => {
-    const trimmed = text.trim()
+  const addTask = useCallback((input: NewTaskInput) => {
+    const trimmed = input.text.trim()
     if (!trimmed) return
     setTasks((prev) => [
       ...prev,
       {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         text: trimmed,
+        description: input.description?.trim() || undefined,
+        date: input.date || undefined,
         done: false,
         createdAt: Date.now(),
-        assignee,
+        assignee: input.assignee,
       },
     ])
   }, [])
