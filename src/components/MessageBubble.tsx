@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge } from 'lucide-react'
+import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy } from 'lucide-react'
 import type { ChatMessage } from '../types'
 import { TAG_META, colorForOperator } from '../types'
 import { formatTime } from '../dateUtils'
@@ -22,6 +22,7 @@ interface MessageBubbleProps {
   onTogglePin: () => void
   onToggleUnresolved: () => void
   onMerge: () => void
+  onCopy: () => void
 }
 
 export default function MessageBubble({
@@ -31,6 +32,7 @@ export default function MessageBubble({
   onTogglePin,
   onToggleUnresolved,
   onMerge,
+  onCopy,
 }: MessageBubbleProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const rtl = isRtlText(message.text) || message.text === ''
@@ -48,9 +50,11 @@ export default function MessageBubble({
       unresolved={!!message.unresolved}
       showUnresolvedToggle={canToggleUnresolved}
       canMerge={canMerge}
+      hasText={message.text.length > 0}
       onTogglePin={onTogglePin}
       onToggleUnresolved={onToggleUnresolved}
       onMerge={onMerge}
+      onCopy={onCopy}
       onDeleteClick={() => setConfirmingDelete(true)}
     />
   )
@@ -128,22 +132,35 @@ function HoverActions({
   unresolved,
   showUnresolvedToggle,
   canMerge,
+  hasText,
   onTogglePin,
   onToggleUnresolved,
   onMerge,
+  onCopy,
   onDeleteClick,
 }: {
   pinned: boolean
   unresolved: boolean
   showUnresolvedToggle: boolean
   canMerge: boolean
+  hasText: boolean
   onTogglePin: () => void
   onToggleUnresolved: () => void
   onMerge: () => void
+  onCopy: () => void
   onDeleteClick: () => void
 }) {
   return (
     <div className="mx-1.5 flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover:opacity-100">
+      {hasText && (
+        <button
+          onClick={onCopy}
+          title="העתקת ההודעה"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-noc-t4 transition-colors hover:bg-noc-accent/15 hover:text-noc-accent"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+      )}
       {canMerge && (
         <button
           onClick={onMerge}

@@ -183,7 +183,7 @@ function App() {
         onSelect={setActiveTab}
       />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-1 overflow-hidden">
+      <div className="flex w-full flex-1 overflow-hidden">
         <TaskRail tasks={tasks} shiftId={activeTab} onToggle={toggleTask} />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -246,6 +246,12 @@ function App() {
               updateMessage(dateKey, activeTab, id, { unresolved: !m?.unresolved })
             }}
             onMergeMessage={(id) => mergeWithPrevious(dateKey, activeTab, id)}
+            onCopyMessage={async (id) => {
+              const m = activeMessages.find((x) => x.id === id)
+              if (!m?.text) return
+              const ok = await copyToClipboard(m.text)
+              if (ok) showToast('ההודעה הועתקה!')
+            }}
             onResolveCarryOver={handleResolveCarryOver}
           />
         </div>

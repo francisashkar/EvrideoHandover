@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-14T23:37:55.352Z",
+  "timestamp": "2026-07-14T23:52:55.361Z",
   "projectRoot": "C:\\Users\\Ashka\\Downloads\\EvrideoHandover",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1784072275352
+  "scannedAt": 1784073175361
 }

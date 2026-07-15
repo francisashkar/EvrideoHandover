@@ -30,7 +30,7 @@ export default function Header({
 
   return (
     <header className="relative border-b border-noc-border bg-noc-panel/90 backdrop-blur-xl supports-[backdrop-filter]:bg-noc-panel/70">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-noc-gradient shadow-lg shadow-emerald-500/25">
             <RadioTower className="h-5 w-5 text-white" />

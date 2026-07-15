@@ -14,6 +14,7 @@ interface ChatFeedProps {
   onTogglePin: (id: string) => void
   onToggleUnresolved: (id: string) => void
   onMergeMessage: (id: string) => void
+  onCopyMessage: (id: string) => void
   onResolveCarryOver: (item: CarryOverItem) => void
 }
 
@@ -26,6 +27,7 @@ export default function ChatFeed({
   onTogglePin,
   onToggleUnresolved,
   onMergeMessage,
+  onCopyMessage,
   onResolveCarryOver,
 }: ChatFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -125,6 +127,7 @@ export default function ChatFeed({
           onTogglePin={() => onTogglePin(message.id)}
           onToggleUnresolved={() => onToggleUnresolved(message.id)}
           onMerge={() => onMergeMessage(message.id)}
+          onCopy={() => onCopyMessage(message.id)}
         />
       ))}
       <div ref={bottomRef} />
