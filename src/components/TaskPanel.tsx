@@ -11,8 +11,10 @@ import {
   LockOpen,
   GripHorizontal,
   CalendarDays,
+  Pencil,
+  Check,
 } from 'lucide-react'
-import type { NewTaskInput, Task, TaskAssignee } from '../hooks/useTasks'
+import type { NewTaskInput, Task, TaskAssignee, TaskPatch } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
 import { formatDateShort } from '../dateUtils'
 
@@ -32,9 +34,15 @@ interface TaskPanelProps {
   /** The date currently selected in the app — used as the default task date */
   currentDateKey: string
   onAdd: (input: NewTaskInput) => void
+  onUpdate: (id: string, patch: TaskPatch) => void
   onToggle: (id: string) => void
   onDelete: (id: string) => void
   onClose: () => void
+}
+
+function assigneeToValue(assignee?: TaskAssignee): string {
+  if (!assignee) return ''
+  return assignee.kind === 'operator' ? `op:${assignee.name}` : `shift:${assignee.shiftId}`
 }
 
 function parseAssignee(value: string): TaskAssignee | undefined {
@@ -68,6 +76,7 @@ export default function TaskPanel({
   operators,
   currentDateKey,
   onAdd,
+  onUpdate,
   onToggle,
   onDelete,
   onClose,
@@ -261,13 +270,27 @@ export default function TaskPanel({
         ) : (
           <div className="space-y-1.5">
             {open.map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={onToggle} onDelete={onDelete} />
+              <TaskRow
+                key={task.id}
+                task={task}
+                operators={operators}
+                onUpdate={onUpdate}
+                onToggle={onToggle}
+                onDelete={onDelete}
+              />
             ))}
             {done.length > 0 && (
               <>
                 <p className="pt-2 text-[10px] font-bold uppercase text-noc-t4">הושלמו ({done.length})</p>
                 {done.map((task) => (
-                  <TaskRow key={task.id} task={task} onToggle={onToggle} onDelete={onDelete} />
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    operators={operators}
+                    onUpdate={onUpdate}
+                    onToggle={onToggle}
+                    onDelete={onDelete}
+                  />
                 ))}
               </>
             )}
@@ -297,13 +320,112 @@ function AssigneeChip({ assignee }: { assignee: TaskAssignee }) {
 
 function TaskRow({
   task,
+  operators,
+  onUpdate,
   onToggle,
   onDelete,
 }: {
   task: Task
+  operators: string[]
+  onUpdate: (id: string, patch: TaskPatch) => void
   onToggle: (id: string) => void
   onDelete: (id: string) => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [eText, setEText] = useState('')
+  const [eDesc, setEDesc] = useState('')
+  const [eDate, setEDate] = useState('')
+  const [eAssignee, setEAssignee] = useState('')
+
+  const startEdit = () => {
+    setEText(task.text)
+    setEDesc(task.description ?? '')
+    setEDate(task.date ?? '')
+    setEAssignee(assigneeToValue(task.assignee))
+    setEditing(true)
+  }
+
+  const saveEdit = () => {
+    if (!eText.trim()) return
+    onUpdate(task.id, {
+      text: eText.trim(),
+      description: eDesc.trim() || undefined,
+      date: eDate || undefined,
+      assignee: parseAssignee(eAssignee),
+    })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-1.5 rounded-lg border border-noc-accent/50 bg-noc-panel2 px-2.5 py-2">
+        <input
+          type="text"
+          value={eText}
+          onChange={(e) => setEText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveEdit()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          placeholder="כותרת המשימה..."
+          className="h-8 w-full rounded-md border border-noc-border bg-noc-bg/40 px-2 text-xs font-semibold text-noc-t1 outline-none focus:border-noc-accent"
+        />
+        <textarea
+          value={eDesc}
+          onChange={(e) => setEDesc(e.target.value)}
+          placeholder="תיאור (אופציונלי)..."
+          rows={2}
+          className="w-full rounded-md border border-noc-border bg-noc-bg/40 px-2 py-1 text-[11px] leading-relaxed text-noc-t1 outline-none focus:border-noc-accent"
+          style={{ resize: 'none' }}
+        />
+        <div className="flex gap-1.5">
+          <input
+            type="date"
+            value={eDate}
+            onChange={(e) => setEDate(e.target.value)}
+            className="h-7 flex-1 rounded-md border border-noc-border bg-noc-bg/40 px-1.5 text-[11px] text-noc-t2 outline-none"
+          />
+          <select
+            value={eAssignee}
+            onChange={(e) => setEAssignee(e.target.value)}
+            className="h-7 flex-1 rounded-md border border-noc-border bg-noc-bg/40 px-1.5 text-[11px] text-noc-t2 outline-none"
+          >
+            <option value="">כללי</option>
+            <optgroup label="משמרת שלמה">
+              {(Object.keys(SHIFT_SHORT_LABELS) as ShiftId[]).map((sid) => (
+                <option key={sid} value={`shift:${sid}`}>
+                  {SHIFT_SHORT_LABELS[sid]}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="נוקיסט">
+              {operators.map((name) => (
+                <option key={name} value={`op:${name}`}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={saveEdit}
+            disabled={!eText.trim()}
+            className="flex items-center gap-1 rounded-full bg-noc-accent px-2.5 py-1 text-[10px] font-bold text-white hover:opacity-90 disabled:opacity-40"
+          >
+            <Check className="h-3 w-3" /> שמירה
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="flex items-center gap-1 rounded-full border border-noc-border px-2.5 py-1 text-[10px] font-bold text-noc-t2 hover:bg-noc-panel3"
+          >
+            <X className="h-3 w-3" /> ביטול
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="group flex items-start gap-2 rounded-lg border border-noc-border bg-noc-panel2 px-2.5 py-2">
       <input
@@ -335,13 +457,22 @@ function TaskRow({
           {task.assignee && <AssigneeChip assignee={task.assignee} />}
         </div>
       </div>
-      <button
-        onClick={() => onDelete(task.id)}
-        title="מחיקת משימה"
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-noc-t4 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          onClick={startEdit}
+          title="עריכת משימה"
+          className="flex h-5 w-5 items-center justify-center rounded-full text-noc-t4 hover:bg-noc-accent/15 hover:text-noc-accent"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button
+          onClick={() => onDelete(task.id)}
+          title="מחיקת משימה"
+          className="flex h-5 w-5 items-center justify-center rounded-full text-noc-t4 hover:bg-red-500/10 hover:text-red-400"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   )
 }

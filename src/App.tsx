@@ -47,6 +47,7 @@ function App() {
     updateMessage,
     deleteMessage,
     mergeWithPrevious,
+    restoreMessage,
     getCarryOver,
     searchAll,
     storageError,
@@ -54,13 +55,18 @@ function App() {
   const { operators, addOperator } = useOperators()
   const { getStatus, setStatus } = useShiftStatus(dateKey)
   const { theme, toggleTheme } = useTheme()
-  const { tasks, addTask, toggleTask, deleteTask } = useTasks()
+  const { tasks, addTask, updateTask, toggleTask, deleteTask } = useTasks()
   const { state: authState, signIn, signOut } = useAuth()
 
-  const showToast = (text: string, variant: ToastState['variant'] = 'success') => {
+  const showToast = (
+    text: string,
+    variant: ToastState['variant'] = 'success',
+    action?: ToastState['action'],
+    duration = 2600,
+  ) => {
     clearTimeout(toastTimer.current)
-    setToast({ text, variant })
-    toastTimer.current = setTimeout(() => setToast(null), 2600)
+    setToast({ text, variant, action })
+    toastTimer.current = setTimeout(() => setToast(null), duration)
   }
 
   useEffect(() => {
@@ -265,7 +271,25 @@ function App() {
             hasUnfilteredMessages={activeMessages.length > 0}
             carryOver={carryOver}
             mergeableIds={mergeableIds}
-            onDeleteMessage={(id) => deleteMessage(dateKey, activeTab, id)}
+            onDeleteMessage={(id) => {
+              const m = activeMessages.find((x) => x.id === id)
+              if (!m) return
+              const dk = dateKey
+              const tab = activeTab
+              deleteMessage(dk, tab, id)
+              showToast(
+                'ההודעה נמחקה',
+                'success',
+                {
+                  label: 'ביטול',
+                  onClick: () => {
+                    restoreMessage(dk, tab, m)
+                    showToast('ההודעה שוחזרה')
+                  },
+                },
+                5000,
+              )
+            }}
             onTogglePin={(id) => {
               const m = activeMessages.find((x) => x.id === id)
               updateMessage(dateKey, activeTab, id, { pinned: !m?.pinned })
@@ -306,6 +330,7 @@ function App() {
           operators={operators}
           currentDateKey={dateKey}
           onAdd={addTask}
+          onUpdate={updateTask}
           onToggle={toggleTask}
           onDelete={deleteTask}
           onClose={() => setTasksOpen(false)}

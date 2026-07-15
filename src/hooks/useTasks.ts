@@ -35,9 +35,12 @@ export interface NewTaskInput {
   assignee?: TaskAssignee
 }
 
+export type TaskPatch = Partial<Pick<Task, 'text' | 'description' | 'date' | 'assignee'>>
+
 export interface TasksApi {
   tasks: Task[]
   addTask: (input: NewTaskInput) => void
+  updateTask: (id: string, patch: TaskPatch) => void
   toggleTask: (id: string) => void
   deleteTask: (id: string) => void
 }
@@ -84,6 +87,16 @@ function useFirestoreTasks(): TasksApi {
     }).catch(() => {})
   }, [])
 
+  const updateTask = useCallback((id: string, patch: TaskPatch) => {
+    if (!db) return
+    const fields: DocumentData = {}
+    if ('text' in patch && patch.text !== undefined) fields.text = patch.text
+    if ('description' in patch) fields.description = patch.description ?? null
+    if ('date' in patch) fields.date = patch.date ?? null
+    if ('assignee' in patch) fields.assignee = patch.assignee ?? null
+    updateDoc(doc(db, TASKS_COLLECTION, id), fields).catch(() => {})
+  }, [])
+
   const toggleTask = useCallback(
     (id: string) => {
       if (!db) return
@@ -99,7 +112,10 @@ function useFirestoreTasks(): TasksApi {
     deleteDoc(doc(db, TASKS_COLLECTION, id)).catch(() => {})
   }, [])
 
-  return useMemo(() => ({ tasks, addTask, toggleTask, deleteTask }), [tasks, addTask, toggleTask, deleteTask])
+  return useMemo(
+    () => ({ tasks, addTask, updateTask, toggleTask, deleteTask }),
+    [tasks, addTask, updateTask, toggleTask, deleteTask],
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +163,10 @@ function useLocalTasks(): TasksApi {
     ])
   }, [])
 
+  const updateTask = useCallback((id: string, patch: TaskPatch) => {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+  }, [])
+
   const toggleTask = useCallback((id: string) => {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)))
   }, [])
@@ -155,7 +175,10 @@ function useLocalTasks(): TasksApi {
     setTasks((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  return useMemo(() => ({ tasks, addTask, toggleTask, deleteTask }), [tasks, addTask, toggleTask, deleteTask])
+  return useMemo(
+    () => ({ tasks, addTask, updateTask, toggleTask, deleteTask }),
+    [tasks, addTask, updateTask, toggleTask, deleteTask],
+  )
 }
 
 export function useTasks(): TasksApi {

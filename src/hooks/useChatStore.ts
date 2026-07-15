@@ -8,6 +8,7 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -26,6 +27,8 @@ export interface ChatStoreApi {
   updateMessage: (dateKey: string, shiftId: ShiftId, messageId: string, patch: Partial<ChatMessage>) => void
   deleteMessage: (dateKey: string, shiftId: ShiftId, messageId: string) => void
   mergeWithPrevious: (dateKey: string, shiftId: ShiftId, messageId: string) => void
+  /** Re-insert a deleted message with its original id/timestamp (undo delete) */
+  restoreMessage: (dateKey: string, shiftId: ShiftId, message: ChatMessage) => void
   getCarryOver: (dateKey: string, shiftId: ShiftId) => CarryOverItem[]
   /** Search message text/operator across ALL dates and shifts, newest first */
   searchAll: (queryText: string) => Promise<CarryOverItem[]>
@@ -222,6 +225,23 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
     [unresolvedAll],
   )
 
+  const restoreMessage = useCallback((dateKey: string, shiftId: ShiftId, message: ChatMessage) => {
+    if (!db) return
+    setDoc(doc(db, MESSAGES_COLLECTION, message.id), {
+      date: dateKey,
+      shift: SHIFT_TO_NUMBER[shiftId],
+      operator_name: message.operator,
+      text: message.text,
+      timestamp: Timestamp.fromMillis(message.timestamp),
+      client_ts: message.timestamp,
+      tag: message.tag ?? 'update',
+      pinned: Boolean(message.pinned),
+      unresolved: Boolean(message.unresolved),
+      edited: Boolean(message.edited),
+      attachments: message.attachments ?? [],
+    }).catch(() => setStorageError(true))
+  }, [])
+
   const searchAll = useCallback(async (queryText: string): Promise<CarryOverItem[]> => {
     if (!db) return []
     const q = queryText.trim().toLowerCase()
@@ -253,6 +273,7 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
       updateMessage,
       deleteMessage,
       mergeWithPrevious,
+      restoreMessage,
       getCarryOver,
       searchAll,
       storageError,
@@ -263,6 +284,7 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
       updateMessage,
       deleteMessage,
       mergeWithPrevious,
+      restoreMessage,
       getCarryOver,
       searchAll,
       storageError,
@@ -378,6 +400,15 @@ function useLocalChatStore(): ChatStoreApi {
     [store],
   )
 
+  const restoreMessage = useCallback((dateKey: string, shiftId: ShiftId, message: ChatMessage) => {
+    setStore((prev) => {
+      const day = prev[dateKey] ?? createEmptyDayMessages()
+      if (day[shiftId].some((m) => m.id === message.id)) return prev
+      const list = [...day[shiftId], message].sort((a, b) => a.timestamp - b.timestamp)
+      return { ...prev, [dateKey]: { ...day, [shiftId]: list } }
+    })
+  }, [])
+
   const searchAll = useCallback(
     async (queryText: string): Promise<CarryOverItem[]> => {
       const q = queryText.trim().toLowerCase()
@@ -403,6 +434,7 @@ function useLocalChatStore(): ChatStoreApi {
       updateMessage,
       deleteMessage,
       mergeWithPrevious,
+      restoreMessage,
       getCarryOver,
       searchAll,
       storageError,
@@ -413,6 +445,7 @@ function useLocalChatStore(): ChatStoreApi {
       updateMessage,
       deleteMessage,
       mergeWithPrevious,
+      restoreMessage,
       getCarryOver,
       searchAll,
       storageError,

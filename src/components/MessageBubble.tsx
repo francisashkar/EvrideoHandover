@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy, Pencil } from 'lucide-react'
-import type { ChatMessage } from '../types'
+import type { ChatMessage, MessageAttachment } from '../types'
 import { TAG_META, attachmentSrc, colorForOperator } from '../types'
 import { formatTime } from '../dateUtils'
 
@@ -40,6 +40,7 @@ export default function MessageBubble({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [lightbox, setLightbox] = useState<MessageAttachment | null>(null)
   const editRef = useRef<HTMLTextAreaElement>(null)
   const rtl = isRtlText(message.text) || message.text === ''
   const badgeColor = colorForOperator(message.operator)
@@ -159,17 +160,15 @@ export default function MessageBubble({
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {message.attachments.map((a) =>
               a.mimeType.startsWith('image/') ? (
-                <a
+                <button
                   key={a.id}
-                  href={attachmentSrc(a)}
-                  download={a.name}
-                  target={a.url ? '_blank' : undefined}
-                  rel={a.url ? 'noreferrer' : undefined}
-                  title={`${a.name} (${formatSize(a.size)})`}
-                  className="block overflow-hidden rounded-lg border border-black/10"
+                  type="button"
+                  onClick={() => setLightbox(a)}
+                  title={`${a.name} (${formatSize(a.size)}) — לחצו להגדלה`}
+                  className="block cursor-zoom-in overflow-hidden rounded-lg border border-black/10 transition-opacity hover:opacity-90"
                 >
                   <img src={attachmentSrc(a)} alt={a.name} className="max-h-48 max-w-56 object-cover" />
-                </a>
+                </button>
               ) : (
                 <a
                   key={a.id}
@@ -191,6 +190,42 @@ export default function MessageBubble({
       </div>
 
       {rtl && actions}
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm sm:p-10"
+          onClick={() => setLightbox(null)}
+        >
+          <img
+            src={attachmentSrc(lightbox)}
+            alt={lightbox.name}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          />
+          <div className="absolute top-4 left-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <a
+              href={attachmentSrc(lightbox)}
+              download={lightbox.name}
+              target={lightbox.url ? '_blank' : undefined}
+              rel={lightbox.url ? 'noreferrer' : undefined}
+              title="הורדת הקובץ"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
+            >
+              <Download className="h-4 w-4" />
+            </a>
+            <button
+              onClick={() => setLightbox(null)}
+              title="סגירה"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <p className="absolute bottom-4 max-w-[80%] truncate rounded-full bg-black/50 px-4 py-1.5 text-xs text-white/80">
+            {lightbox.name} · {formatSize(lightbox.size)}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
