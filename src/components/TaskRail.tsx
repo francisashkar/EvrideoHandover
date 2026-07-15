@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { CalendarDays, Check, ListTodo, User, Users } from 'lucide-react'
 import type { Task } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
@@ -22,6 +23,25 @@ const ROTATIONS = ['-rotate-1', 'rotate-1', '-rotate-2', 'rotate-2']
  *   (undated tasks appear every day)
  */
 export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRailProps) {
+  const [leavingIds, setLeavingIds] = useState<Set<string>>(new Set())
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  const handleDone = (id: string) => {
+    if (leavingIds.has(id)) return
+    setLeavingIds((prev) => new Set(prev).add(id))
+    // let the crumple animation play before the task actually flips to done
+    const t = setTimeout(() => {
+      onToggle(id)
+      timers.current.delete(id)
+      setLeavingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }, 350)
+    timers.current.set(id, t)
+  }
+
   const notes = tasks.filter(
     (t) =>
       !t.done &&
@@ -48,7 +68,9 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
           notes.map((task, i) => (
             <div
               key={task.id}
-              className={`${ROTATIONS[i % ROTATIONS.length]} rounded-sm bg-yellow-200 p-2.5 text-slate-900 shadow-lg shadow-black/30 transition-transform hover:rotate-0`}
+              className={`${ROTATIONS[i % ROTATIONS.length]} rounded-sm bg-yellow-200 p-2.5 text-slate-900 shadow-lg shadow-black/30 transition-transform hover:rotate-0 ${
+                leavingIds.has(task.id) ? 'note-leaving' : ''
+              }`}
             >
               <div className="mb-1.5 flex items-center justify-between gap-1">
                 <div className="flex flex-wrap items-center gap-1">
@@ -61,7 +83,7 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
                   )}
                 </div>
                 <button
-                  onClick={() => onToggle(task.id)}
+                  onClick={() => handleDone(task.id)}
                   title="סימון כבוצע"
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-yellow-600/40 text-yellow-800 transition-colors hover:border-emerald-600 hover:bg-emerald-500 hover:text-white"
                 >

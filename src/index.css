@@ -96,6 +96,26 @@
     color: transparent;
   }
 
+  /* Sticky note "done" exit — crumple up and fly away */
+  @keyframes note-out {
+    0% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+    35% {
+      opacity: 1;
+      transform: scale(1.06) rotate(3deg);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.3) rotate(18deg) translateY(-28px);
+    }
+  }
+  .note-leaving {
+    animation: note-out 0.35s ease-in forwards;
+    pointer-events: none;
+  }
+
   /* WhatsApp-style doodle wallpaper, tiled subtly over the chat area */
   .wa-wallpaper {
     background-color: rgb(var(--noc-wallpaper));

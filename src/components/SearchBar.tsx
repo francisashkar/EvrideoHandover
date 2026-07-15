@@ -1,14 +1,15 @@
-import { Search, X } from 'lucide-react'
+import { Search, X, Globe } from 'lucide-react'
 
 interface SearchBarProps {
   query: string
   onQueryChange: (query: string) => void
+  onOpenGlobal: () => void
 }
 
-export default function SearchBar({ query, onQueryChange }: SearchBarProps) {
+export default function SearchBar({ query, onQueryChange, onOpenGlobal }: SearchBarProps) {
   return (
-    <div className="px-4 pb-3 sm:px-6">
-      <div className="relative">
+    <div className="flex gap-1.5 px-4 pb-3 sm:px-6">
+      <div className="relative flex-1">
         <Search className="pointer-events-none absolute end-4 top-1/2 h-4 w-4 -translate-y-1/2 text-noc-t3" />
         <input
           type="text"
@@ -26,6 +27,15 @@ export default function SearchBar({ query, onQueryChange }: SearchBarProps) {
           </button>
         )}
       </div>
+
+      <button
+        onClick={onOpenGlobal}
+        title="חיפוש בכל התאריכים והמשמרות"
+        className="flex shrink-0 items-center gap-1.5 rounded-full border border-noc-border bg-noc-panel2 px-3.5 text-xs font-semibold text-noc-t2 transition-colors hover:border-noc-accent/50 hover:text-noc-accent"
+      >
+        <Globe className="h-4 w-4" />
+        <span className="hidden sm:inline">בכל התאריכים</span>
+      </button>
     </div>
   )
 }

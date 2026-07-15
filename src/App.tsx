@@ -12,6 +12,7 @@ import DailyOverview from './components/DailyOverview'
 import TaskPanel from './components/TaskPanel'
 import TaskRail from './components/TaskRail'
 import LoginScreen from './components/LoginScreen'
+import GlobalSearchModal from './components/GlobalSearchModal'
 import { useAuth } from './hooks/useAuth'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
@@ -36,7 +37,9 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [tasksOpen, setTasksOpen] = useState(false)
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
+  const skipSearchClearRef = useRef(false)
 
   const {
     getDayMessages,
@@ -45,6 +48,7 @@ function App() {
     deleteMessage,
     mergeWithPrevious,
     getCarryOver,
+    searchAll,
     storageError,
   } = useChatStore(dateKey)
   const { operators, addOperator } = useOperators()
@@ -69,6 +73,11 @@ function App() {
   }, [])
 
   useEffect(() => {
+    // Global-search navigation sets its own query — don't wipe it
+    if (skipSearchClearRef.current) {
+      skipSearchClearRef.current = false
+      return
+    }
     setSearchQuery('')
   }, [activeTab, dateKey])
 
@@ -244,7 +253,11 @@ function App() {
         </div>
 
         <ShiftStatsBar messages={activeMessages} />
-        <SearchBar query={searchQuery} onQueryChange={setSearchQuery} />
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          onOpenGlobal={() => setGlobalSearchOpen(true)}
+        />
 
         <div className="relative flex flex-1 flex-col overflow-hidden">
           <ChatFeed
@@ -306,6 +319,20 @@ function App() {
         activeTab={activeTab}
         liveShiftId={liveShiftId}
         onSelectShift={setActiveTab}
+      />
+
+      <GlobalSearchModal
+        open={globalSearchOpen}
+        initialQuery={searchQuery}
+        onClose={() => setGlobalSearchOpen(false)}
+        onSearch={searchAll}
+        onNavigate={(dk, shiftId, q) => {
+          skipSearchClearRef.current = true
+          setDateKey(dk)
+          setActiveTab(shiftId)
+          setSearchQuery(q)
+          setGlobalSearchOpen(false)
+        }}
       />
 
       <Toast toast={toast} />

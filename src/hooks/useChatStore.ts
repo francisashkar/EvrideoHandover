@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -26,7 +27,13 @@ export interface ChatStoreApi {
   deleteMessage: (dateKey: string, shiftId: ShiftId, messageId: string) => void
   mergeWithPrevious: (dateKey: string, shiftId: ShiftId, messageId: string) => void
   getCarryOver: (dateKey: string, shiftId: ShiftId) => CarryOverItem[]
+  /** Search message text/operator across ALL dates and shifts, newest first */
+  searchAll: (queryText: string) => Promise<CarryOverItem[]>
   storageError: boolean
+}
+
+function matchesQuery(m: ChatMessage, q: string): boolean {
+  return m.text.toLowerCase().includes(q) || m.operator.toLowerCase().includes(q)
 }
 
 /** True when strictly earlier than the given date+shift (used for carry-over). */
@@ -108,6 +115,8 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
   const [dayMessages, setDayMessages] = useState<DayMessages>(createEmptyDayMessages)
   const [unresolvedAll, setUnresolvedAll] = useState<CarryOverItem[]>([])
   const [storageError, setStorageError] = useState(false)
+  // Short-lived cache of the full collection for global search
+  const searchCache = useRef<{ at: number; items: CarryOverItem[] } | null>(null)
 
   // Real-time listener for the selected date
   useEffect(() => {
@@ -213,6 +222,30 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
     [unresolvedAll],
   )
 
+  const searchAll = useCallback(async (queryText: string): Promise<CarryOverItem[]> => {
+    if (!db) return []
+    const q = queryText.trim().toLowerCase()
+    if (!q) return []
+    if (!searchCache.current || Date.now() - searchCache.current.at > 60_000) {
+      try {
+        const snapshot = await getDocs(collection(db, MESSAGES_COLLECTION))
+        const items: CarryOverItem[] = []
+        snapshot.docs.forEach((d) => {
+          const data = d.data()
+          const shiftId = NUMBER_TO_SHIFT[data.shift as number]
+          if (shiftId) items.push({ dateKey: data.date as string, shiftId, message: docToMessage(d.id, data) })
+        })
+        searchCache.current = { at: Date.now(), items }
+      } catch {
+        setStorageError(true)
+        return []
+      }
+    }
+    return searchCache.current.items
+      .filter((i) => matchesQuery(i.message, q))
+      .sort((a, b) => b.message.timestamp - a.message.timestamp)
+  }, [])
+
   return useMemo(
     () => ({
       getDayMessages,
@@ -221,9 +254,19 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
       deleteMessage,
       mergeWithPrevious,
       getCarryOver,
+      searchAll,
       storageError,
     }),
-    [getDayMessages, addMessage, updateMessage, deleteMessage, mergeWithPrevious, getCarryOver, storageError],
+    [
+      getDayMessages,
+      addMessage,
+      updateMessage,
+      deleteMessage,
+      mergeWithPrevious,
+      getCarryOver,
+      searchAll,
+      storageError,
+    ],
   )
 }
 
@@ -335,6 +378,24 @@ function useLocalChatStore(): ChatStoreApi {
     [store],
   )
 
+  const searchAll = useCallback(
+    async (queryText: string): Promise<CarryOverItem[]> => {
+      const q = queryText.trim().toLowerCase()
+      if (!q) return []
+      const items: CarryOverItem[] = []
+      for (const [dk, day] of Object.entries(store)) {
+        for (const sid of SHIFT_ORDER) {
+          for (const m of day[sid] ?? []) {
+            if (matchesQuery(m, q)) items.push({ dateKey: dk, shiftId: sid, message: m })
+          }
+        }
+      }
+      items.sort((a, b) => b.message.timestamp - a.message.timestamp)
+      return items
+    },
+    [store],
+  )
+
   return useMemo(
     () => ({
       getDayMessages,
@@ -343,9 +404,19 @@ function useLocalChatStore(): ChatStoreApi {
       deleteMessage,
       mergeWithPrevious,
       getCarryOver,
+      searchAll,
       storageError,
     }),
-    [getDayMessages, addMessage, updateMessage, deleteMessage, mergeWithPrevious, getCarryOver, storageError],
+    [
+      getDayMessages,
+      addMessage,
+      updateMessage,
+      deleteMessage,
+      mergeWithPrevious,
+      getCarryOver,
+      searchAll,
+      storageError,
+    ],
   )
 }
 
