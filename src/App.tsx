@@ -11,6 +11,8 @@ import type { ToastState } from './components/Toast'
 import DailyOverview from './components/DailyOverview'
 import TaskPanel from './components/TaskPanel'
 import TaskRail from './components/TaskRail'
+import LoginScreen from './components/LoginScreen'
+import { useAuth } from './hooks/useAuth'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
 import { useShiftStatus } from './hooks/useShiftStatus'
@@ -49,6 +51,7 @@ function App() {
   const { getStatus, setStatus } = useShiftStatus(dateKey)
   const { theme, toggleTheme } = useTheme()
   const { tasks, addTask, toggleTask, deleteTask } = useTasks()
+  const { state: authState, signIn, signOut } = useAuth()
 
   const showToast = (text: string, variant: ToastState['variant'] = 'success') => {
     clearTimeout(toastTimer.current)
@@ -141,9 +144,21 @@ function App() {
   }
 
   const handleCopyTicketUpdate = async () => {
-    const message = generateTicketUpdate(dateKey, activeShiftDef, activeMessages, activeStatus)
+    const message = generateTicketUpdate(activeShiftDef, activeMessages)
     const ok = await copyToClipboard(message)
     if (ok) showToast('הועתק ללוח!')
+  }
+
+  if (authState === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-noc-bg">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-noc-accent border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (authState === 'signed-out') {
+    return <LoginScreen onSignIn={signIn} />
   }
 
   return (
@@ -159,6 +174,7 @@ function App() {
         onToggleTasks={() => setTasksOpen((v) => !v)}
         tasksOpen={tasksOpen}
         openTaskCount={tasks.filter((t) => !t.done).length}
+        onSignOut={signOut}
       />
 
       {!firebaseEnabled && (

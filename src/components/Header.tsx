@@ -1,4 +1,5 @@
-import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo } from 'lucide-react'
+import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut } from 'lucide-react'
+import { firebaseEnabled } from '../firebase'
 import { formatDateLong } from '../dateUtils'
 
 interface HeaderProps {
@@ -12,6 +13,7 @@ interface HeaderProps {
   onToggleTasks: () => void
   tasksOpen: boolean
   openTaskCount: number
+  onSignOut: () => void
 }
 
 export default function Header({
@@ -25,6 +27,7 @@ export default function Header({
   onToggleTasks,
   tasksOpen,
   openTaskCount,
+  onSignOut,
 }: HeaderProps) {
   const timeLabel = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
@@ -96,6 +99,16 @@ export default function Header({
             <LayoutGrid className="h-4 w-4" />
             <span className="hidden sm:inline">תצוגה כללית</span>
           </button>
+
+          {firebaseEnabled && (
+            <button
+              onClick={onSignOut}
+              title="התנתקות"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-noc-border bg-noc-panel2 text-noc-t3 transition-colors hover:border-red-500/40 hover:text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </header>

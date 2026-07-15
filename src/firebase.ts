@@ -4,6 +4,8 @@ import { getFirestore } from 'firebase/firestore'
 import type { Firestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import type { FirebaseStorage } from 'firebase/storage'
+import { getAuth } from 'firebase/auth'
+import type { Auth } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -32,6 +34,7 @@ const app: FirebaseApp | null = firebaseEnabled
 
 export const db: Firestore | null = app ? getFirestore(app) : null
 export const storage: FirebaseStorage | null = app ? getStorage(app) : null
+export const auth: Auth | null = app ? getAuth(app) : null
 
 // Fail fast instead of the SDK's default multi-minute retry loop, so the UI
 // can tell the user quickly when Storage isn't provisioned or rules deny access
