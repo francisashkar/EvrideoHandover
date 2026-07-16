@@ -23,25 +23,35 @@ export interface Task {
   description?: string
   /** YYYY-MM-DD — when set, the task belongs to that date only; empty = every day */
   date?: string
+  /** Recurring tasks reset daily — completion is tracked per date in doneDates */
+  recurring?: boolean
   done: boolean
+  doneDates?: string[]
   createdAt: number
   assignee?: TaskAssignee
+}
+
+/** Whether the task counts as done for the given date. */
+export function isTaskDone(task: Task, dateKey: string): boolean {
+  return task.recurring ? (task.doneDates ?? []).includes(dateKey) : task.done
 }
 
 export interface NewTaskInput {
   text: string
   description?: string
   date?: string
+  recurring?: boolean
   assignee?: TaskAssignee
 }
 
-export type TaskPatch = Partial<Pick<Task, 'text' | 'description' | 'date' | 'assignee'>>
+export type TaskPatch = Partial<Pick<Task, 'text' | 'description' | 'date' | 'recurring' | 'assignee'>>
 
 export interface TasksApi {
   tasks: Task[]
   addTask: (input: NewTaskInput) => void
   updateTask: (id: string, patch: TaskPatch) => void
-  toggleTask: (id: string) => void
+  /** Toggle done state; for recurring tasks the toggle applies to the given date only */
+  toggleTask: (id: string, dateKey: string) => void
   deleteTask: (id: string) => void
 }
 
@@ -55,7 +65,9 @@ function docToTask(id: string, data: DocumentData): Task {
     text: (data.text as string) ?? '',
     description: (data.description as string) || undefined,
     date: (data.date as string) || undefined,
+    recurring: Boolean(data.recurring),
     done: Boolean(data.done),
+    doneDates: Array.isArray(data.done_dates) ? (data.done_dates as string[]) : undefined,
     createdAt: (data.created_at as number) ?? 0,
     assignee: (data.assignee as TaskAssignee | null) ?? undefined,
   }
@@ -81,7 +93,9 @@ function useFirestoreTasks(): TasksApi {
       text: trimmed,
       description: input.description?.trim() || null,
       date: input.date || null,
+      recurring: Boolean(input.recurring),
       done: false,
+      done_dates: [],
       created_at: Date.now(),
       assignee: input.assignee ?? null,
     }).catch(() => {})
@@ -93,16 +107,24 @@ function useFirestoreTasks(): TasksApi {
     if ('text' in patch && patch.text !== undefined) fields.text = patch.text
     if ('description' in patch) fields.description = patch.description ?? null
     if ('date' in patch) fields.date = patch.date ?? null
+    if ('recurring' in patch) fields.recurring = Boolean(patch.recurring)
     if ('assignee' in patch) fields.assignee = patch.assignee ?? null
     updateDoc(doc(db, TASKS_COLLECTION, id), fields).catch(() => {})
   }, [])
 
   const toggleTask = useCallback(
-    (id: string) => {
+    (id: string, dateKey: string) => {
       if (!db) return
       const task = tasks.find((t) => t.id === id)
       if (!task) return
-      updateDoc(doc(db, TASKS_COLLECTION, id), { done: !task.done }).catch(() => {})
+      if (task.recurring) {
+        const set = new Set(task.doneDates ?? [])
+        if (set.has(dateKey)) set.delete(dateKey)
+        else set.add(dateKey)
+        updateDoc(doc(db, TASKS_COLLECTION, id), { done_dates: [...set] }).catch(() => {})
+      } else {
+        updateDoc(doc(db, TASKS_COLLECTION, id), { done: !task.done }).catch(() => {})
+      }
     },
     [tasks],
   )
@@ -156,7 +178,9 @@ function useLocalTasks(): TasksApi {
         text: trimmed,
         description: input.description?.trim() || undefined,
         date: input.date || undefined,
+        recurring: Boolean(input.recurring),
         done: false,
+        doneDates: [],
         createdAt: Date.now(),
         assignee: input.assignee,
       },
@@ -167,8 +191,19 @@ function useLocalTasks(): TasksApi {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
   }, [])
 
-  const toggleTask = useCallback((id: string) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)))
+  const toggleTask = useCallback((id: string, dateKey: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t
+        if (t.recurring) {
+          const set = new Set(t.doneDates ?? [])
+          if (set.has(dateKey)) set.delete(dateKey)
+          else set.add(dateKey)
+          return { ...t, doneDates: [...set] }
+        }
+        return { ...t, done: !t.done }
+      }),
+    )
   }, [])
 
   const deleteTask = useCallback((id: string) => {

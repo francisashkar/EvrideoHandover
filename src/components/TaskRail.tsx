@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
-import { CalendarDays, Check, ListTodo, User, Users } from 'lucide-react'
+import { CalendarDays, Check, ListTodo, User, Users, Infinity as InfinityIcon, Repeat } from 'lucide-react'
 import type { Task } from '../hooks/useTasks'
+import { isTaskDone } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
 import { SHIFT_SHORT_LABELS } from './TaskPanel'
 import { formatDateShort } from '../dateUtils'
@@ -44,7 +45,7 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
 
   const notes = tasks.filter(
     (t) =>
-      !t.done &&
+      !isTaskDone(t, dateKey) &&
       (t.assignee?.kind !== 'shift' || t.assignee.shiftId === shiftId) &&
       (!t.date || t.date === dateKey),
   )
@@ -75,10 +76,20 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
               <div className="mb-1.5 flex items-center justify-between gap-1">
                 <div className="flex flex-wrap items-center gap-1">
                   <TaskChip task={task} />
-                  {task.date && (
+                  {task.recurring ? (
+                    <span className="flex items-center gap-1 rounded-full bg-yellow-300/80 px-1.5 py-0.5 text-[9px] font-bold text-yellow-900">
+                      <Repeat className="h-2.5 w-2.5" />
+                      חוזר
+                    </span>
+                  ) : task.date ? (
                     <span className="flex items-center gap-1 rounded-full bg-yellow-300/80 px-1.5 py-0.5 text-[9px] font-bold text-yellow-900">
                       <CalendarDays className="h-2.5 w-2.5" />
                       {formatDateShort(task.date)}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full bg-yellow-300/80 px-1.5 py-0.5 text-[9px] font-bold text-yellow-900">
+                      <InfinityIcon className="h-2.5 w-2.5" />
+                      קבוע
                     </span>
                   )}
                 </div>
@@ -90,9 +101,9 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
                   <Check className="h-3 w-3" />
                 </button>
               </div>
-              <p className="break-words text-[11px] font-bold leading-relaxed">{task.text}</p>
+              <p className="whitespace-pre-wrap break-words text-[11px] font-bold leading-relaxed">{task.text}</p>
               {task.description && (
-                <p className="mt-0.5 break-words text-[10px] leading-relaxed text-slate-700">
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-[10px] leading-relaxed text-slate-700">
                   {task.description}
                 </p>
               )}

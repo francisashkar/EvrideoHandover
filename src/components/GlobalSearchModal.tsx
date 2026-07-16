@@ -3,6 +3,7 @@ import { X, Search, Loader2, SearchX } from 'lucide-react'
 import type { CarryOverItem, ShiftId } from '../types'
 import { SHIFT_DEFINITIONS, colorForOperator } from '../types'
 import { formatDateShort, formatTime } from '../dateUtils'
+import HighlightText from './HighlightText'
 
 interface GlobalSearchModalProps {
   open: boolean
@@ -10,19 +11,6 @@ interface GlobalSearchModalProps {
   onClose: () => void
   onSearch: (query: string) => Promise<CarryOverItem[]>
   onNavigate: (dateKey: string, shiftId: ShiftId, query: string) => void
-}
-
-function Highlight({ text, term }: { text: string; term: string }) {
-  const t = term.trim()
-  const idx = t ? text.toLowerCase().indexOf(t.toLowerCase()) : -1
-  if (idx < 0) return <>{text}</>
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark className="rounded bg-amber-400/50 px-0.5 text-inherit">{text.slice(idx, idx + t.length)}</mark>
-      {text.slice(idx + t.length)}
-    </>
-  )
 }
 
 export default function GlobalSearchModal({
@@ -137,7 +125,7 @@ export default function GlobalSearchModal({
                       </span>
                     </div>
                     <p className="line-clamp-2 text-xs leading-relaxed text-noc-t1">
-                      <Highlight text={item.message.text || '(קובץ מצורף)'} term={query} />
+                      <HighlightText text={item.message.text || '(קובץ מצורף)'} term={query} />
                     </p>
                   </button>
                 )

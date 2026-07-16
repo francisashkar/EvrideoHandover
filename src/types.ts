@@ -42,7 +42,7 @@ export const SHIFT_DEFINITIONS: ShiftDefinition[] = [
 
 export const SHIFT_ORDER: ShiftId[] = ['shift1', 'shift2', 'shift3']
 
-export type MessageTag = 'update' | 'incident' | 'followup'
+export type MessageTag = 'update' | 'incident' | 'followup' | 'maintenance' | 'provider' | 'hardware'
 
 export const TAG_META: Record<MessageTag, { label: string; chip: string; ticketPrefix: string }> = {
   update: {
@@ -59,6 +59,21 @@ export const TAG_META: Record<MessageTag, { label: string; chip: string; ticketP
     label: 'מעקב',
     chip: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
     ticketPrefix: '[מעקב] ',
+  },
+  maintenance: {
+    label: 'תחזוקה',
+    chip: 'bg-violet-500/15 text-violet-500 ring-violet-500/30 dark:text-violet-400',
+    ticketPrefix: '[תחזוקה] ',
+  },
+  provider: {
+    label: 'ספק',
+    chip: 'bg-orange-500/15 text-orange-500 ring-orange-500/30 dark:text-orange-400',
+    ticketPrefix: '[ספק] ',
+  },
+  hardware: {
+    label: 'חומרה',
+    chip: 'bg-rose-500/15 text-rose-500 ring-rose-500/30 dark:text-rose-400',
+    ticketPrefix: '[חומרה] ',
   },
 }
 

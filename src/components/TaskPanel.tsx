@@ -13,8 +13,13 @@ import {
   CalendarDays,
   Pencil,
   Check,
+  Infinity as InfinityIcon,
+  Repeat,
 } from 'lucide-react'
+
+export type TaskMode = 'date' | 'permanent' | 'recurring'
 import type { NewTaskInput, Task, TaskAssignee, TaskPatch } from '../hooks/useTasks'
+import { isTaskDone } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
 import { formatDateShort } from '../dateUtils'
 
@@ -84,6 +89,7 @@ export default function TaskPanel({
   const [text, setText] = useState('')
   const [description, setDescription] = useState('')
   const [taskDate, setTaskDate] = useState(currentDateKey)
+  const [mode, setMode] = useState<TaskMode>('date')
   const [assigneeValue, setAssigneeValue] = useState('')
   const [pos, setPos] = useState(loadPos)
   const [locked, setLocked] = useState(() => {
@@ -138,12 +144,14 @@ export default function TaskPanel({
     onAdd({
       text,
       description: description.trim() || undefined,
-      date: taskDate || undefined,
+      date: mode === 'date' ? taskDate || undefined : undefined,
+      recurring: mode === 'recurring',
       assignee: parseAssignee(assigneeValue),
     })
     setText('')
     setDescription('')
     setTaskDate(currentDateKey)
+    setMode('date')
     setAssigneeValue('')
   }
 
@@ -154,8 +162,8 @@ export default function TaskPanel({
     }
   }
 
-  const open = tasks.filter((t) => !t.done)
-  const done = tasks.filter((t) => t.done)
+  const open = tasks.filter((t) => !isTaskDone(t, currentDateKey))
+  const done = tasks.filter((t) => isTaskDone(t, currentDateKey))
 
   return (
     <div
@@ -229,39 +237,69 @@ export default function TaskPanel({
           style={{ resize: 'none' }}
         />
 
-        <div className="flex gap-1.5">
-          <div className="flex h-8 flex-1 items-center gap-1.5 rounded-lg border border-noc-border bg-noc-panel2 px-2">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-noc-accent2" />
-            <input
-              type="date"
-              value={taskDate}
-              onChange={(e) => setTaskDate(e.target.value)}
-              title="תאריך המשימה (ריק = כל יום)"
-              className="w-full bg-transparent text-xs text-noc-t2 outline-none"
-            />
-          </div>
+        <div className="flex items-stretch gap-1.5">
           <select
-            value={assigneeValue}
-            onChange={(e) => setAssigneeValue(e.target.value)}
-            className="h-8 flex-1 rounded-lg border border-noc-border bg-noc-panel2 px-2 text-xs text-noc-t2 outline-none focus:border-noc-accent"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as TaskMode)}
+            className="h-8 shrink-0 rounded-lg border border-noc-border bg-noc-panel2 px-2 text-[11px] font-bold text-noc-t2 outline-none focus:border-noc-accent"
           >
-            <option value="">שיוך: כללי</option>
-            <optgroup label="משמרת שלמה">
-              {(Object.keys(SHIFT_SHORT_LABELS) as ShiftId[]).map((sid) => (
-                <option key={sid} value={`shift:${sid}`}>
-                  {SHIFT_SHORT_LABELS[sid]}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="נוקיסט">
-              {operators.map((name) => (
-                <option key={name} value={`op:${name}`}>
-                  {name}
-                </option>
-              ))}
-            </optgroup>
+            <option value="date">לתאריך</option>
+            <option value="permanent">קבוע (עד ביצוע)</option>
+            <option value="recurring">חוזר כל יום</option>
           </select>
+          {mode === 'date' ? (
+            <div className="flex h-8 flex-1 items-center gap-1.5 rounded-lg border border-noc-border bg-noc-panel2 px-2">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0 text-noc-accent2" />
+              <input
+                type="date"
+                value={taskDate}
+                onChange={(e) => setTaskDate(e.target.value)}
+                title="תאריך המשימה"
+                className="w-full min-w-0 bg-transparent text-xs text-noc-t2 outline-none"
+              />
+            </div>
+          ) : (
+            <div
+              className={`flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-dashed px-2 text-[10px] ${
+                mode === 'recurring'
+                  ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                  : 'border-violet-500/40 text-violet-500 dark:text-violet-300'
+              }`}
+            >
+              {mode === 'recurring' ? (
+                <>
+                  <Repeat className="h-3 w-3" /> מתאפסת כל יום
+                </>
+              ) : (
+                <>
+                  <InfinityIcon className="h-3 w-3" /> תופיע בכל התאריכים
+                </>
+              )}
+            </div>
+          )}
         </div>
+
+        <select
+          value={assigneeValue}
+          onChange={(e) => setAssigneeValue(e.target.value)}
+          className="h-8 w-full rounded-lg border border-noc-border bg-noc-panel2 px-2 text-xs text-noc-t2 outline-none focus:border-noc-accent"
+        >
+          <option value="">שיוך: כללי</option>
+          <optgroup label="משמרת שלמה">
+            {(Object.keys(SHIFT_SHORT_LABELS) as ShiftId[]).map((sid) => (
+              <option key={sid} value={`shift:${sid}`}>
+                {SHIFT_SHORT_LABELS[sid]}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="נוקיסט">
+            {operators.map((name) => (
+              <option key={name} value={`op:${name}`}>
+                {name}
+              </option>
+            ))}
+          </optgroup>
+        </select>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 scrollbar-thin">
@@ -274,6 +312,7 @@ export default function TaskPanel({
                 key={task.id}
                 task={task}
                 operators={operators}
+                currentDateKey={currentDateKey}
                 onUpdate={onUpdate}
                 onToggle={onToggle}
                 onDelete={onDelete}
@@ -287,6 +326,7 @@ export default function TaskPanel({
                     key={task.id}
                     task={task}
                     operators={operators}
+                    currentDateKey={currentDateKey}
                     onUpdate={onUpdate}
                     onToggle={onToggle}
                     onDelete={onDelete}
@@ -321,12 +361,14 @@ function AssigneeChip({ assignee }: { assignee: TaskAssignee }) {
 function TaskRow({
   task,
   operators,
+  currentDateKey,
   onUpdate,
   onToggle,
   onDelete,
 }: {
   task: Task
   operators: string[]
+  currentDateKey: string
   onUpdate: (id: string, patch: TaskPatch) => void
   onToggle: (id: string) => void
   onDelete: (id: string) => void
@@ -335,12 +377,15 @@ function TaskRow({
   const [eText, setEText] = useState('')
   const [eDesc, setEDesc] = useState('')
   const [eDate, setEDate] = useState('')
+  const [eMode, setEMode] = useState<TaskMode>('date')
   const [eAssignee, setEAssignee] = useState('')
+  const rowDone = isTaskDone(task, currentDateKey)
 
   const startEdit = () => {
     setEText(task.text)
     setEDesc(task.description ?? '')
     setEDate(task.date ?? '')
+    setEMode(task.recurring ? 'recurring' : task.date ? 'date' : 'permanent')
     setEAssignee(assigneeToValue(task.assignee))
     setEditing(true)
   }
@@ -350,7 +395,8 @@ function TaskRow({
     onUpdate(task.id, {
       text: eText.trim(),
       description: eDesc.trim() || undefined,
-      date: eDate || undefined,
+      date: eMode === 'date' ? eDate || undefined : undefined,
+      recurring: eMode === 'recurring',
       assignee: parseAssignee(eAssignee),
     })
     setEditing(false)
@@ -378,13 +424,44 @@ function TaskRow({
           className="w-full rounded-md border border-noc-border bg-noc-bg/40 px-2 py-1 text-[11px] leading-relaxed text-noc-t1 outline-none focus:border-noc-accent"
           style={{ resize: 'none' }}
         />
+        <div className="flex items-stretch gap-1.5">
+          <select
+            value={eMode}
+            onChange={(e) => setEMode(e.target.value as TaskMode)}
+            className="h-7 shrink-0 rounded-md border border-noc-border bg-noc-bg/40 px-1.5 text-[10px] font-bold text-noc-t2 outline-none"
+          >
+            <option value="date">לתאריך</option>
+            <option value="permanent">קבוע (עד ביצוע)</option>
+            <option value="recurring">חוזר כל יום</option>
+          </select>
+          {eMode === 'date' ? (
+            <input
+              type="date"
+              value={eDate}
+              onChange={(e) => setEDate(e.target.value)}
+              className="h-7 min-w-0 flex-1 rounded-md border border-noc-border bg-noc-bg/40 px-1.5 text-[11px] text-noc-t2 outline-none"
+            />
+          ) : (
+            <div
+              className={`flex h-7 flex-1 items-center justify-center gap-1 rounded-md border border-dashed px-1.5 text-[10px] ${
+                eMode === 'recurring'
+                  ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                  : 'border-violet-500/40 text-violet-500 dark:text-violet-300'
+              }`}
+            >
+              {eMode === 'recurring' ? (
+                <>
+                  <Repeat className="h-3 w-3" /> מתאפסת כל יום
+                </>
+              ) : (
+                <>
+                  <InfinityIcon className="h-3 w-3" /> תופיע בכל התאריכים
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex gap-1.5">
-          <input
-            type="date"
-            value={eDate}
-            onChange={(e) => setEDate(e.target.value)}
-            className="h-7 flex-1 rounded-md border border-noc-border bg-noc-bg/40 px-1.5 text-[11px] text-noc-t2 outline-none"
-          />
           <select
             value={eAssignee}
             onChange={(e) => setEAssignee(e.target.value)}
@@ -430,28 +507,42 @@ function TaskRow({
     <div className="group flex items-start gap-2 rounded-lg border border-noc-border bg-noc-panel2 px-2.5 py-2">
       <input
         type="checkbox"
-        checked={task.done}
+        checked={rowDone}
         onChange={() => onToggle(task.id)}
         className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#00a884]"
       />
       <div className="min-w-0 flex-1 space-y-1">
         <p
-          className={`break-words text-xs font-semibold leading-relaxed ${
-            task.done ? 'text-noc-t4 line-through' : 'text-noc-t1'
+          className={`whitespace-pre-wrap break-words text-xs font-semibold leading-relaxed ${
+            rowDone ? 'text-noc-t4 line-through' : 'text-noc-t1'
           }`}
         >
           {task.text}
         </p>
         {task.description && (
-          <p className={`break-words text-[11px] leading-relaxed ${task.done ? 'text-noc-t4' : 'text-noc-t3'}`}>
+          <p
+            className={`whitespace-pre-wrap break-words text-[11px] leading-relaxed ${
+              rowDone ? 'text-noc-t4' : 'text-noc-t3'
+            }`}
+          >
             {task.description}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-1">
-          {task.date && (
+          {task.recurring ? (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600 ring-1 ring-emerald-500/30 dark:text-emerald-400">
+              <Repeat className="h-2.5 w-2.5" />
+              חוזר כל יום
+            </span>
+          ) : task.date ? (
             <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-600 ring-1 ring-sky-500/30 dark:text-sky-300">
               <CalendarDays className="h-2.5 w-2.5" />
               {formatDateShort(task.date)}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-bold text-violet-600 ring-1 ring-violet-500/30 dark:text-violet-300">
+              <InfinityIcon className="h-2.5 w-2.5" />
+              קבוע
             </span>
           )}
           {task.assignee && <AssigneeChip assignee={task.assignee} />}

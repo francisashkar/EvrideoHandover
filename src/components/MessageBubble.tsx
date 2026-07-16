@@ -4,6 +4,7 @@ import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy, Pe
 import type { ChatMessage, MessageAttachment } from '../types'
 import { TAG_META, attachmentSrc, colorForOperator } from '../types'
 import { formatTime } from '../dateUtils'
+import HighlightText from './HighlightText'
 
 /** Detects Hebrew (or other RTL) script so the bubble can auto-align. */
 function isRtlText(text: string): boolean {
@@ -19,6 +20,7 @@ function formatSize(bytes: number): string {
 interface MessageBubbleProps {
   message: ChatMessage
   canMerge: boolean
+  highlightTerm: string
   onDelete: () => void
   onTogglePin: () => void
   onToggleUnresolved: () => void
@@ -29,6 +31,7 @@ interface MessageBubbleProps {
 
 export default function MessageBubble({
   message,
+  highlightTerm,
   canMerge,
   onDelete,
   onTogglePin,
@@ -151,7 +154,7 @@ export default function MessageBubble({
               dir={rtl ? 'rtl' : 'ltr'}
               className="whitespace-pre-wrap break-words text-sm leading-relaxed text-noc-t1"
             >
-              {message.text}
+              <HighlightText text={message.text} term={highlightTerm} />
             </p>
           )
         )}
@@ -256,7 +259,7 @@ function HoverActions({
   onDeleteClick: () => void
 }) {
   return (
-    <div className="mx-1.5 flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover:opacity-100">
+    <div className="mx-1.5 mt-1 flex shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover:opacity-100">
       {hasText && (
         <button
           onClick={onEditClick}
@@ -317,7 +320,7 @@ function HoverActions({
 
 function DeleteConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="mx-1.5 flex shrink-0 items-center gap-1 self-center">
+    <div className="mx-1.5 mt-1 flex shrink-0 items-center gap-1 self-start">
       <button
         onClick={onConfirm}
         title="אישור מחיקה"

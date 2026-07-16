@@ -1,15 +1,26 @@
 import { useEffect, useRef } from 'react'
-import { MessageSquareText, SearchX, Pin, CircleAlert, Check } from 'lucide-react'
+import { MessageSquareText, SearchX, Pin, CircleAlert, Check, Timer } from 'lucide-react'
 import type { CarryOverItem, ChatMessage } from '../types'
 import { SHIFT_DEFINITIONS } from '../types'
 import MessageBubble from './MessageBubble'
 import { formatDateShort, formatTime } from '../dateUtils'
+
+/** How long an incident has been open, in coarse Hebrew units. */
+function openDuration(timestamp: number): string {
+  const mins = Math.floor((Date.now() - timestamp) / 60_000)
+  if (mins < 60) return 'פחות משעה'
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return hours === 1 ? 'שעה' : `${hours} שעות`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? 'יום' : `${days} ימים`
+}
 
 interface ChatFeedProps {
   messages: ChatMessage[]
   hasUnfilteredMessages: boolean
   carryOver: CarryOverItem[]
   mergeableIds: Set<string>
+  highlightTerm: string
   onDeleteMessage: (id: string) => void
   onTogglePin: (id: string) => void
   onToggleUnresolved: (id: string) => void
@@ -24,6 +35,7 @@ export default function ChatFeed({
   hasUnfilteredMessages,
   carryOver,
   mergeableIds,
+  highlightTerm,
   onDeleteMessage,
   onTogglePin,
   onToggleUnresolved,
@@ -65,9 +77,15 @@ export default function ChatFeed({
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs text-noc-t1">{item.message.text || '(קובץ מצורף)'}</p>
-                    <p className="text-[10px] text-noc-t3">
-                      {item.message.operator} · {shiftDef.label} · {formatDateShort(item.dateKey)} ·{' '}
-                      {formatTime(item.message.timestamp)}
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-noc-t3">
+                      <span>
+                        {item.message.operator} · {shiftDef.label} · {formatDateShort(item.dateKey)} ·{' '}
+                        {formatTime(item.message.timestamp)}
+                      </span>
+                      <span className="flex items-center gap-0.5 font-bold text-amber-500">
+                        <Timer className="h-3 w-3" />
+                        פתוח כבר {openDuration(item.message.timestamp)}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -125,6 +143,7 @@ export default function ChatFeed({
           key={message.id}
           message={message}
           canMerge={mergeableIds.has(message.id)}
+          highlightTerm={highlightTerm}
           onDelete={() => onDeleteMessage(message.id)}
           onTogglePin={() => onTogglePin(message.id)}
           onToggleUnresolved={() => onToggleUnresolved(message.id)}
