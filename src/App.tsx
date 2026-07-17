@@ -16,7 +16,6 @@ import GlobalSearchModal from './components/GlobalSearchModal'
 import { useAuth } from './hooks/useAuth'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
-import { useShiftStatus } from './hooks/useShiftStatus'
 import { useTasks, isTaskDone } from './hooks/useTasks'
 import { useTheme } from './hooks/useTheme'
 import { firebaseEnabled } from './firebase'
@@ -25,8 +24,6 @@ import type { CarryOverItem, MessageAttachment, MessageTag, ShiftId, ShiftStatus
 import { getActiveShiftId, todayKey } from './dateUtils'
 import { copyToClipboard } from './clipboard'
 import { generateTicketUpdate } from './ticketGenerator'
-
-const STATUS_ORDER: ShiftStatus[] = ['ok', 'minor', 'major']
 
 function App() {
   const [dateKey, setDateKey] = useState<string>(todayKey())
@@ -56,7 +53,6 @@ function App() {
     storageError,
   } = useChatStore(dateKey)
   const { operators, addOperator } = useOperators()
-  const { getStatus, setStatus } = useShiftStatus(dateKey)
   const { theme, toggleTheme } = useTheme()
   const { tasks, addTask, updateTask, toggleTask, deleteTask } = useTasks()
   const { state: authState, signIn, signOut } = useAuth()
@@ -114,8 +110,21 @@ function App() {
   const dayMessages = getDayMessages(dateKey)
   const activeShiftDef = SHIFT_DEFINITIONS.find((s) => s.id === activeTab)!
   const activeMessages = dayMessages[activeTab]
-  const activeStatus = getStatus(dateKey, activeTab)
   const carryOver = getCarryOver(dateKey, activeTab)
+
+  // Shift status is derived automatically: an open (unresolved) incident
+  // makes the shift תקלה; once everything is resolved it returns to תקין
+  const statuses = useMemo(
+    () =>
+      Object.fromEntries(
+        SHIFT_DEFINITIONS.map((def) => [
+          def.id,
+          dayMessages[def.id].some((m) => m.tag === 'incident' && m.unresolved) ? 'major' : 'ok',
+        ]),
+      ) as Record<ShiftId, ShiftStatus>,
+    [dayMessages],
+  )
+  const activeStatus = statuses[activeTab]
 
   const messageCounts = useMemo(
     () =>
@@ -124,15 +133,6 @@ function App() {
         number
       >,
     [dayMessages],
-  )
-
-  const statuses = useMemo(
-    () =>
-      Object.fromEntries(SHIFT_DEFINITIONS.map((def) => [def.id, getStatus(dateKey, def.id)])) as Record<
-        ShiftId,
-        ShiftStatus
-      >,
-    [dateKey, getStatus],
   )
 
   const tagCounts = useMemo(() => {
@@ -171,6 +171,9 @@ function App() {
       operator: selectedOperator,
       text,
       tag,
+      // Incidents open as unresolved — this flips the shift status to תקלה
+      // until someone marks them as resolved
+      unresolved: tag === 'incident' ? true : undefined,
       attachments: attachments.length > 0 ? attachments : undefined,
     })
   }
@@ -266,25 +269,21 @@ function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Shift status selector */}
-            <div className="flex items-center gap-1 rounded-full border border-noc-border bg-noc-panel2 p-1">
-              {STATUS_ORDER.map((s) => {
-                const meta = STATUS_META[s]
-                const selected = s === activeStatus
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setStatus(dateKey, activeTab, s)}
-                    title={meta.label}
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold transition-all ${
-                      selected ? 'bg-noc-panel3 text-noc-t1 shadow-sm' : 'text-noc-t4 hover:text-noc-t2'
-                    }`}
-                  >
-                    <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
-                    <span className={selected ? '' : 'hidden sm:inline'}>{meta.label}</span>
-                  </button>
-                )
-              })}
+            {/* Shift status — derived automatically from open incidents */}
+            <div
+              title={
+                activeStatus === 'major'
+                  ? 'יש תקלה פתוחה במשמרת — סמנו אותה כטופלה כדי לחזור לתקין'
+                  : 'אין תקלות פתוחות במשמרת'
+              }
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold ${
+                activeStatus === 'major'
+                  ? 'border-red-500/50 bg-red-500/15 text-red-500 dark:text-red-400'
+                  : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${STATUS_META[activeStatus].dot}`} />
+              {activeStatus === 'major' ? 'תקלה פתוחה' : 'תקין'}
             </div>
 
             <button
