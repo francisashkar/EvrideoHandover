@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, KeyboardEvent } from 'react'
+import type { ChangeEvent, ClipboardEvent as ClipboardPasteEvent, KeyboardEvent } from 'react'
 import { Plus, Send, Paperclip, X, FileText, Loader2, Zap } from 'lucide-react'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseEnabled, storage } from '../firebase'
@@ -136,9 +136,7 @@ export default function ChatInputBar({
     }
   }
 
-  const handleFiles = async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = '' // allow re-selecting the same file
+  const addFiles = async (files: File[]) => {
     for (const file of files) {
       if (attachments.length >= MAX_FILES) {
         onFileError(`ניתן לצרף עד ${MAX_FILES} קבצים להודעה`)
@@ -192,6 +190,32 @@ export default function ChatInputBar({
         }
       }
     }
+  }
+
+  const handleFiles = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = '' // allow re-selecting the same file
+    void addFiles(files)
+  }
+
+  /** Paste a screenshot/image straight from the clipboard into the message */
+  const handlePaste = (e: ClipboardPasteEvent) => {
+    const files = Array.from(e.clipboardData?.items ?? [])
+      .filter((item) => item.kind === 'file')
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => f !== null)
+      .map((f) => {
+        // Clipboard screenshots arrive as generic "image.png" — give them a real name
+        if (/^image\.\w+$/i.test(f.name)) {
+          const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+          const ext = f.type.split('/')[1] || 'png'
+          return new File([f], `screenshot-${stamp}.${ext}`, { type: f.type })
+        }
+        return f
+      })
+    if (files.length === 0) return
+    e.preventDefault()
+    void addFiles(files)
   }
 
   const removeAttachment = (id: string) => {
@@ -410,9 +434,10 @@ export default function ChatInputBar({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           dir={rtl ? 'rtl' : 'ltr'}
           rows={1}
-          placeholder="הקלד עדכון... (Enter לשליחה, Shift+Enter לשורה חדשה)"
+          placeholder="הקלד עדכון... (Enter לשליחה, Ctrl+V להדבקת צילום מסך)"
           className="chat-textarea order-2 max-h-40 min-h-11 flex-1 rounded-xl border border-noc-border bg-noc-panel2 px-3 py-2.5 text-sm leading-relaxed text-noc-t1 placeholder-noc-t4 outline-none transition-colors focus:border-noc-accent"
           style={{ resize: 'none' }}
         />

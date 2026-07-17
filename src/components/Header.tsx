@@ -1,6 +1,6 @@
 import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2 } from 'lucide-react'
 import { firebaseEnabled } from '../firebase'
-import { formatDateLong, todayKey } from '../dateUtils'
+import { formatDateLong, shiftDateKey } from '../dateUtils'
 
 interface HeaderProps {
   dateKey: string
@@ -62,9 +62,9 @@ export default function Header({
             />
           </div>
 
-          {dateKey !== todayKey() && (
+          {dateKey !== shiftDateKey() && (
             <button
-              onClick={() => onDateChange(todayKey())}
+              onClick={() => onDateChange(shiftDateKey())}
               title="חזרה לתאריך של היום"
               className="flex items-center gap-1.5 rounded-full border border-noc-accent/50 bg-noc-accent/15 px-3 py-2 text-sm font-bold text-noc-accent transition-colors hover:bg-noc-accent/25"
             >

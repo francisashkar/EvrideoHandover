@@ -21,12 +21,12 @@ import { useTheme } from './hooks/useTheme'
 import { firebaseEnabled } from './firebase'
 import { SHIFT_DEFINITIONS, STATUS_META, TAG_META } from './types'
 import type { CarryOverItem, MessageAttachment, MessageTag, ShiftId, ShiftStatus } from './types'
-import { getActiveShiftId, todayKey } from './dateUtils'
+import { getActiveShiftId, shiftDateKey } from './dateUtils'
 import { copyToClipboard } from './clipboard'
 import { generateTicketUpdate } from './ticketGenerator'
 
 function App() {
-  const [dateKey, setDateKey] = useState<string>(todayKey())
+  const [dateKey, setDateKey] = useState<string>(() => shiftDateKey())
   const [now, setNow] = useState(new Date())
   const [activeTab, setActiveTab] = useState<ShiftId>(() => getActiveShiftId())
   const [selectedOperator, setSelectedOperator] = useState<string>('')
@@ -96,7 +96,10 @@ function App() {
     }
   }, [storageError])
 
-  const isToday = dateKey === todayKey()
+  // The operational "today" — between midnight and 07:00 this is yesterday's
+  // date, because the night shift belongs to the day it started on
+  const operationalToday = shiftDateKey(now)
+  const isToday = dateKey === operationalToday
   const liveShiftId = isToday ? getActiveShiftId(now) : null
 
   // Offer to switch tabs when the real-world shift changes while the app is open
@@ -253,6 +256,7 @@ function App() {
             {liveShiftId && activeTab !== liveShiftId && (
               <button
                 onClick={() => {
+                  setDateKey(operationalToday)
                   setActiveTab(liveShiftId)
                   setShiftPrompt(null)
                 }}
@@ -344,6 +348,7 @@ function App() {
             <span className="flex items-center gap-1.5">
               <button
                 onClick={() => {
+                  setDateKey(operationalToday)
                   setActiveTab(shiftPrompt)
                   setShiftPrompt(null)
                 }}

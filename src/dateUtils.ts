@@ -9,6 +9,17 @@ export function todayKey(): string {
   return toDateKey(new Date())
 }
 
+/**
+ * The operational shift date. The night shift (23:00-07:00) belongs to the day
+ * it STARTED on — so between midnight and 07:00 the current shift date is
+ * yesterday, not the calendar date.
+ */
+export function shiftDateKey(now: Date = new Date()): string {
+  const d = new Date(now)
+  if (d.getHours() < 7) d.setDate(d.getDate() - 1)
+  return toDateKey(d)
+}
+
 export function formatDateLong(dateKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number)
   const date = new Date(y, m - 1, d)
