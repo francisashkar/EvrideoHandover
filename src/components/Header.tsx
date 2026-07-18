@@ -1,4 +1,4 @@
-import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2 } from 'lucide-react'
+import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen } from 'lucide-react'
 import { firebaseEnabled } from '../firebase'
 import { formatDateLong, shiftDateKey } from '../dateUtils'
 
@@ -14,6 +14,8 @@ interface HeaderProps {
   tasksOpen: boolean
   openTaskCount: number
   onSignOut: () => void
+  onOpenContacts: () => void
+  onOpenRunbook: () => void
 }
 
 export default function Header({
@@ -28,6 +30,8 @@ export default function Header({
   tasksOpen,
   openTaskCount,
   onSignOut,
+  onOpenContacts,
+  onOpenRunbook,
 }: HeaderProps) {
   const timeLabel = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
@@ -72,6 +76,22 @@ export default function Header({
               היום
             </button>
           )}
+
+          <button
+            onClick={onOpenContacts}
+            title="ספר טלפונים — אסקלציה"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-noc-border bg-noc-panel2 text-noc-t2 transition-colors hover:border-noc-borderLight hover:text-noc-accent"
+          >
+            <BookUser className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={onOpenRunbook}
+            title="יומן תפעול — נהלים והוראות"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-noc-border bg-noc-panel2 text-noc-t2 transition-colors hover:border-noc-borderLight hover:text-noc-accent"
+          >
+            <BookOpen className="h-4 w-4" />
+          </button>
 
           <button
             onClick={onToggleTheme}

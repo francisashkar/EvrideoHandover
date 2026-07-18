@@ -101,6 +101,12 @@ export interface ChatMessage {
   pinned?: boolean
   unresolved?: boolean
   edited?: boolean
+  /** Operators who marked this message as seen (ראיתי) */
+  acks?: string[]
+  /** Links this message to an incident message's id (ציר זמן של תקלה) */
+  incidentId?: string
+  /** Written ahead of time for a future shift */
+  scheduled?: boolean
   attachments?: MessageAttachment[]
 }
 

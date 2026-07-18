@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, ClipboardEvent as ClipboardPasteEvent, KeyboardEvent } from 'react'
-import { Plus, Send, Paperclip, X, FileText, Loader2, Zap } from 'lucide-react'
+import { Plus, Send, Paperclip, X, FileText, Loader2, Zap, ChevronDown, Check, Clock, Link2 } from 'lucide-react'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseEnabled, storage } from '../firebase'
-import type { MessageAttachment, MessageTag } from '../types'
-import { TAG_META, attachmentSrc } from '../types'
+import type { MessageAttachment, MessageTag, ShiftId } from '../types'
+import { SHIFT_DEFINITIONS } from '../types'
+import { TAG_META, attachmentSrc, colorForOperator } from '../types'
 
 // With Firebase, files go to Cloud Storage (only a link is kept in the message) — 10MB cap.
 // In localStorage fallback mode they're stored inline as data URLs, so keep them small.
@@ -15,12 +16,24 @@ const INLINE_FALLBACK_BYTES = 700 * 1024
 const MAX_FILES = 5
 const MAX_TEXTAREA_HEIGHT = 160
 
+export interface SendExtras {
+  incidentId?: string
+  targetDateKey?: string
+  targetShiftId?: ShiftId
+}
+
 interface ChatInputBarProps {
   operators: string[]
   selectedOperator: string
+  /** Unique key of the current date+shift — unsent drafts are kept per key */
+  draftKey: string
+  /** Open incidents of the current shift, offered for linking follow-ups */
+  openIncidents: { id: string; label: string }[]
+  currentDateKey: string
+  currentShiftId: ShiftId
   onSelectOperator: (name: string) => void
   onAddOperator: (name: string) => void
-  onSend: (text: string, tag: MessageTag, attachments: MessageAttachment[]) => void
+  onSend: (text: string, tag: MessageTag, attachments: MessageAttachment[], extras: SendExtras) => void
   onFileError: (message: string) => void
 }
 
@@ -66,6 +79,10 @@ function loadTemplates(): string[] {
 export default function ChatInputBar({
   operators,
   selectedOperator,
+  draftKey,
+  openIncidents,
+  currentDateKey,
+  currentShiftId,
   onSelectOperator,
   onAddOperator,
   onSend,
@@ -79,6 +96,11 @@ export default function ChatInputBar({
   const [templates, setTemplates] = useState<string[]>(loadTemplates)
   const [newTemplate, setNewTemplate] = useState('')
   const [addingOperator, setAddingOperator] = useState(false)
+  const [operatorMenuOpen, setOperatorMenuOpen] = useState(false)
+  const [incidentLink, setIncidentLink] = useState('')
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [schedDate, setSchedDate] = useState(currentDateKey)
+  const [schedShift, setSchedShift] = useState<ShiftId>(currentShiftId)
   const [newOperatorName, setNewOperatorName] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const newOperatorInputRef = useRef<HTMLInputElement>(null)
@@ -87,6 +109,37 @@ export default function ChatInputBar({
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
+
+  // Draft autosave — unsent text survives refresh/crash, kept per date+shift.
+  // skipSaveRef prevents the save effect (which runs with the pre-load empty
+  // text right after a load) from wiping the stored draft.
+  const skipSaveRef = useRef(true)
+  useEffect(() => {
+    skipSaveRef.current = true
+    try {
+      setText(window.localStorage.getItem(`noc-draft-${draftKey}`) ?? '')
+    } catch {
+      setText('')
+    }
+    setIncidentLink('')
+    setScheduleOpen(false)
+    setSchedDate(currentDateKey)
+    setSchedShift(currentShiftId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey])
+
+  useEffect(() => {
+    if (skipSaveRef.current) {
+      skipSaveRef.current = false
+      return
+    }
+    try {
+      if (text) window.localStorage.setItem(`noc-draft-${draftKey}`, text)
+      else window.localStorage.removeItem(`noc-draft-${draftKey}`)
+    } catch {
+      // ignore
+    }
+  }, [text, draftKey])
 
   useEffect(() => {
     const el = textareaRef.current
@@ -122,12 +175,19 @@ export default function ChatInputBar({
 
   const handleSend = () => {
     if (!canSend) return
-    onSend(text.trim(), tag, attachments)
+    onSend(text.trim(), tag, attachments, {
+      incidentId: incidentLink || undefined,
+      targetDateKey: scheduleOpen ? schedDate : undefined,
+      targetShiftId: scheduleOpen ? schedShift : undefined,
+    })
     setText('')
     setTag('update')
     setAttachments([])
+    setIncidentLink('')
+    setScheduleOpen(false)
     textareaRef.current?.focus()
   }
+
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -375,6 +435,61 @@ export default function ChatInputBar({
           )}
         </div>
 
+        {/* Link a follow-up to an open incident */}
+        {openIncidents.length > 0 && tag !== 'incident' && (
+          <span className="flex items-center gap-1 rounded-full ring-1 ring-noc-border px-1 py-0.5">
+            <Link2 className="h-3 w-3 text-red-400" />
+            <select
+              value={incidentLink}
+              onChange={(e) => setIncidentLink(e.target.value)}
+              className="max-w-44 bg-transparent text-[11px] font-bold text-noc-t3 outline-none"
+            >
+              <option value="">ללא שיוך לתקלה</option>
+              {openIncidents.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+          </span>
+        )}
+
+        {/* Send to another date/shift */}
+        <button
+          type="button"
+          onClick={() => setScheduleOpen((v) => !v)}
+          title="שליחה לתאריך/משמרת אחרים"
+          className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
+            scheduleOpen
+              ? 'bg-violet-500/15 text-violet-500 ring-violet-500/40 dark:text-violet-300'
+              : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+          }`}
+        >
+          <Clock className="h-3 w-3" />
+          למועד אחר
+        </button>
+        {scheduleOpen && (
+          <span className="flex items-center gap-1.5 rounded-full bg-violet-500/10 px-2 py-1 ring-1 ring-violet-500/30">
+            <input
+              type="date"
+              value={schedDate}
+              onChange={(e) => setSchedDate(e.target.value)}
+              className="bg-transparent text-[11px] text-noc-t2 outline-none"
+            />
+            <select
+              value={schedShift}
+              onChange={(e) => setSchedShift(e.target.value as ShiftId)}
+              className="bg-transparent text-[11px] font-bold text-noc-t2 outline-none"
+            >
+              {SHIFT_DEFINITIONS.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </span>
+        )}
+
         {attachments.map((a) => (
           <span
             key={a.id}
@@ -405,27 +520,88 @@ export default function ChatInputBar({
       </div>
 
       <div className="flex items-end gap-2">
-        {/* Operator selector — native select, left side */}
-        <div className="order-1 flex h-11 shrink-0 items-center gap-1 rounded-xl border border-noc-border bg-noc-panel2 ps-1 pe-2">
-          <select
-            value={selectedOperator}
-            onChange={(e) => onSelectOperator(e.target.value)}
-            className="h-full max-w-[7rem] truncate bg-transparent px-2 text-sm font-medium text-noc-t2 outline-none"
-          >
-            {operators.map((name) => (
-              <option key={name} value={name} className="bg-noc-panel2 text-noc-t1">
-                {name}
-              </option>
-            ))}
-          </select>
+        {/* Operator picker — avatar button with popup */}
+        <div className="relative order-1">
           <button
             type="button"
-            onClick={() => setAddingOperator(true)}
-            title="הוספת נוקיסט"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-noc-t3 transition-colors hover:bg-noc-panel3 hover:text-noc-accent2"
+            onClick={() => setOperatorMenuOpen((v) => !v)}
+            title="בחירת נוקיסט"
+            className={`flex h-11 shrink-0 items-center gap-2 rounded-xl border ps-1.5 pe-3 transition-colors ${
+              operatorMenuOpen
+                ? 'border-noc-accent/60 bg-noc-accent/10'
+                : 'border-noc-border bg-noc-panel2 hover:border-noc-accent/50'
+            }`}
           >
-            <Plus className="h-4 w-4" />
+            <span
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ring-1 ${colorForOperator(
+                selectedOperator || '?',
+              )}`}
+            >
+              {(selectedOperator || '?').charAt(0)}
+            </span>
+            <span className="max-w-24 truncate text-sm font-semibold text-noc-t1">
+              {selectedOperator || 'בחר נוקיסט'}
+            </span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-noc-t4 transition-transform ${operatorMenuOpen ? 'rotate-180' : ''}`}
+            />
           </button>
+
+          {operatorMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setOperatorMenuOpen(false)} />
+              <div className="absolute bottom-full start-0 z-50 mb-2 w-56 overflow-hidden rounded-xl border border-noc-border bg-noc-panel2 shadow-2xl">
+                <p className="border-b border-noc-border bg-noc-panel3/50 px-3 py-1.5 text-[10px] font-bold text-noc-t3">
+                  מי כותב עכשיו?
+                </p>
+                <div className="max-h-64 overflow-y-auto scrollbar-thin">
+                  {operators.map((name) => {
+                    const selected = name === selectedOperator
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => {
+                          onSelectOperator(name)
+                          setOperatorMenuOpen(false)
+                        }}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-start transition-colors ${
+                          selected ? 'bg-noc-accent/10' : 'hover:bg-noc-panel3'
+                        }`}
+                      >
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ${colorForOperator(name)}`}
+                        >
+                          {name.charAt(0)}
+                        </span>
+                        <span
+                          className={`min-w-0 flex-1 truncate text-sm ${
+                            selected ? 'font-bold text-noc-accent' : 'font-medium text-noc-t1'
+                          }`}
+                        >
+                          {name}
+                        </span>
+                        {selected && <Check className="h-4 w-4 shrink-0 text-noc-accent" />}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOperatorMenuOpen(false)
+                    setAddingOperator(true)
+                  }}
+                  className="flex w-full items-center gap-2.5 border-t border-noc-border px-3 py-2 text-start text-sm font-medium text-noc-accent2 transition-colors hover:bg-noc-accent/10"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-noc-accent2/50">
+                    <Plus className="h-3.5 w-3.5" />
+                  </span>
+                  הוספת נוקיסט
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Textarea — middle */}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy, Pencil } from 'lucide-react'
+import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy, Pencil, Eye, ListTree, Clock, Link2 } from 'lucide-react'
 import type { ChatMessage, MessageAttachment } from '../types'
 import { TAG_META, attachmentSrc, colorForOperator } from '../types'
 import { formatTime } from '../dateUtils'
@@ -21,24 +21,30 @@ interface MessageBubbleProps {
   message: ChatMessage
   canMerge: boolean
   highlightTerm: string
+  currentOperator: string
   onDelete: () => void
   onTogglePin: () => void
   onToggleUnresolved: () => void
   onMerge: () => void
   onCopy: () => void
   onEdit: (newText: string) => void
+  onToggleAck: () => void
+  onOpenThread: (incidentId: string) => void
 }
 
 export default function MessageBubble({
   message,
   highlightTerm,
   canMerge,
+  currentOperator,
   onDelete,
   onTogglePin,
   onToggleUnresolved,
   onMerge,
   onCopy,
   onEdit,
+  onToggleAck,
+  onOpenThread,
 }: MessageBubbleProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -94,6 +100,10 @@ export default function MessageBubble({
       onCopy={onCopy}
       onEditClick={startEdit}
       onDeleteClick={() => setConfirmingDelete(true)}
+      acked={(message.acks ?? []).includes(currentOperator)}
+      onToggleAck={onToggleAck}
+      threadId={message.tag === 'incident' ? message.id : message.incidentId}
+      onOpenThread={onOpenThread}
     />
   )
 
@@ -119,6 +129,20 @@ export default function MessageBubble({
           {message.unresolved && <CircleAlert className="h-3 w-3 text-amber-400" />}
           <span className="text-[10px] text-noc-t3">{formatTime(message.timestamp)}</span>
           {message.edited && <span className="text-[9px] text-noc-t4">(נערך)</span>}
+          {message.scheduled && (
+            <span className="flex items-center gap-0.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-bold text-violet-500 ring-1 ring-violet-500/30 dark:text-violet-300">
+              <Clock className="h-2.5 w-2.5" /> נכתב מראש
+            </span>
+          )}
+          {message.incidentId && (
+            <button
+              onClick={() => onOpenThread(message.incidentId!)}
+              title="פתיחת ציר הזמן של התקלה"
+              className="flex items-center gap-0.5 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-400 ring-1 ring-red-500/30 hover:bg-red-500/20"
+            >
+              <Link2 className="h-2.5 w-2.5" /> מקושר לתקלה
+            </button>
+          )}
         </div>
 
         {editing ? (
@@ -162,7 +186,9 @@ export default function MessageBubble({
         {message.attachments && message.attachments.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {message.attachments.map((a) =>
-              a.mimeType.startsWith('image/') ? (
+              a.mimeType.startsWith('audio/') ? (
+                <audio key={a.id} controls preload="metadata" src={attachmentSrc(a)} className="h-10 max-w-full" />
+              ) : a.mimeType.startsWith('image/') ? (
                 <button
                   key={a.id}
                   type="button"
@@ -189,6 +215,13 @@ export default function MessageBubble({
               ),
             )}
           </div>
+        )}
+
+        {message.acks && message.acks.length > 0 && (
+          <p className="mt-1 flex items-center gap-1 text-[9px] text-noc-t4">
+            <Eye className="h-2.5 w-2.5" />
+            נראה ע"י: {message.acks.join(', ')}
+          </p>
         )}
       </div>
 
@@ -239,27 +272,53 @@ function HoverActions({
   showUnresolvedToggle,
   canMerge,
   hasText,
+  acked,
+  threadId,
   onTogglePin,
   onToggleUnresolved,
   onMerge,
   onCopy,
   onEditClick,
   onDeleteClick,
+  onToggleAck,
+  onOpenThread,
 }: {
   pinned: boolean
   unresolved: boolean
   showUnresolvedToggle: boolean
   canMerge: boolean
   hasText: boolean
+  acked: boolean
+  threadId?: string
   onTogglePin: () => void
   onToggleUnresolved: () => void
   onMerge: () => void
   onCopy: () => void
   onEditClick: () => void
   onDeleteClick: () => void
+  onToggleAck: () => void
+  onOpenThread: (id: string) => void
 }) {
   return (
     <div className="mx-1.5 mt-1 flex shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover:opacity-100">
+      <button
+        onClick={onToggleAck}
+        title={acked ? 'ביטול סימון ראיתי' : 'סמן שראיתי'}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-noc-accent2/15 ${
+          acked ? 'text-noc-accent2' : 'text-noc-t4 hover:text-noc-accent2'
+        }`}
+      >
+        <Eye className="h-3.5 w-3.5" />
+      </button>
+      {threadId && (
+        <button
+          onClick={() => onOpenThread(threadId)}
+          title="ציר זמן של התקלה"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-noc-t4 transition-colors hover:bg-red-500/10 hover:text-red-400"
+        >
+          <ListTree className="h-3.5 w-3.5" />
+        </button>
+      )}
       {hasText && (
         <button
           onClick={onEditClick}

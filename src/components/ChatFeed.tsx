@@ -21,12 +21,15 @@ interface ChatFeedProps {
   carryOver: CarryOverItem[]
   mergeableIds: Set<string>
   highlightTerm: string
+  currentOperator: string
   onDeleteMessage: (id: string) => void
   onTogglePin: (id: string) => void
   onToggleUnresolved: (id: string) => void
   onMergeMessage: (id: string) => void
   onCopyMessage: (id: string) => void
   onEditMessage: (id: string, newText: string) => void
+  onToggleAck: (id: string) => void
+  onOpenThread: (incidentId: string) => void
   onResolveCarryOver: (item: CarryOverItem) => void
 }
 
@@ -36,12 +39,15 @@ export default function ChatFeed({
   carryOver,
   mergeableIds,
   highlightTerm,
+  currentOperator,
   onDeleteMessage,
   onTogglePin,
   onToggleUnresolved,
   onMergeMessage,
   onCopyMessage,
   onEditMessage,
+  onToggleAck,
+  onOpenThread,
   onResolveCarryOver,
 }: ChatFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -150,6 +156,9 @@ export default function ChatFeed({
           onMerge={() => onMergeMessage(message.id)}
           onCopy={() => onCopyMessage(message.id)}
           onEdit={(newText) => onEditMessage(message.id, newText)}
+          currentOperator={currentOperator}
+          onToggleAck={() => onToggleAck(message.id)}
+          onOpenThread={onOpenThread}
         />
       ))}
       <div ref={bottomRef} />

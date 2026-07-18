@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ticket, CloudOff, ArrowLeftRight, X } from 'lucide-react'
+import { Ticket, CloudOff, ArrowLeftRight, X, Hand } from 'lucide-react'
 import Header from './components/Header'
 import ShiftTabs from './components/ShiftTabs'
 import ShiftStatsBar from './components/ShiftStatsBar'
@@ -13,17 +13,24 @@ import TaskPanel from './components/TaskPanel'
 import TaskRail from './components/TaskRail'
 import LoginScreen from './components/LoginScreen'
 import GlobalSearchModal from './components/GlobalSearchModal'
+import ContactsPanel from './components/ContactsPanel'
+import RunbookPanel from './components/RunbookPanel'
+import IncidentThreadModal from './components/IncidentThreadModal'
 import { useAuth } from './hooks/useAuth'
+import { useContacts } from './hooks/useContacts'
+import { useRunbook } from './hooks/useRunbook'
+import { useHandover } from './hooks/useHandover'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
 import { useTasks, isTaskDone } from './hooks/useTasks'
 import { useTheme } from './hooks/useTheme'
 import { firebaseEnabled } from './firebase'
-import { SHIFT_DEFINITIONS, STATUS_META, TAG_META } from './types'
+import { SHIFT_DEFINITIONS, STATUS_META, TAG_META, colorForOperator } from './types'
 import type { CarryOverItem, MessageAttachment, MessageTag, ShiftId, ShiftStatus } from './types'
-import { getActiveShiftId, shiftDateKey } from './dateUtils'
-import { copyToClipboard } from './clipboard'
-import { generateTicketUpdate } from './ticketGenerator'
+import type { SendExtras } from './components/ChatInputBar'
+import { getActiveShiftId, shiftDateKey, formatTime, formatDateShort } from './dateUtils'
+import { copyToClipboard, copyRichText } from './clipboard'
+import { generateTicketUpdate, generateTicketUpdateHtml } from './ticketGenerator'
 
 function App() {
   const [dateKey, setDateKey] = useState<string>(() => shiftDateKey())
@@ -36,7 +43,11 @@ function App() {
   const [tasksOpen, setTasksOpen] = useState(false)
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [tagFilter, setTagFilter] = useState<MessageTag | 'all'>('all')
+  const [operatorFilter, setOperatorFilter] = useState<string>('all')
   const [shiftPrompt, setShiftPrompt] = useState<ShiftId | null>(null)
+  const [contactsOpen, setContactsOpen] = useState(false)
+  const [runbookOpen, setRunbookOpen] = useState(false)
+  const [threadId, setThreadId] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const skipSearchClearRef = useRef(false)
   const prevLiveShiftRef = useRef<ShiftId | null>(null)
@@ -56,6 +67,9 @@ function App() {
   const { theme, toggleTheme } = useTheme()
   const { tasks, addTask, updateTask, toggleTask, deleteTask } = useTasks()
   const { state: authState, signIn, signOut } = useAuth()
+  const contactsApi = useContacts()
+  const runbookApi = useRunbook()
+  const { getAck, acceptShift } = useHandover()
 
   const showToast = (
     text: string,
@@ -85,6 +99,7 @@ function App() {
     }
     setSearchQuery('')
     setTagFilter('all')
+    setOperatorFilter('all')
   }, [activeTab, dateKey])
 
   useEffect(() => {
@@ -114,6 +129,15 @@ function App() {
   const activeShiftDef = SHIFT_DEFINITIONS.find((s) => s.id === activeTab)!
   const activeMessages = dayMessages[activeTab]
   const carryOver = getCarryOver(dateKey, activeTab)
+  const handoverAck = getAck(dateKey, activeTab)
+
+  const openIncidents = useMemo(
+    () =>
+      activeMessages
+        .filter((m) => m.tag === 'incident' && m.unresolved)
+        .map((m) => ({ id: m.id, label: m.text.slice(0, 40) || 'תקלה' })),
+    [activeMessages],
+  )
 
   // Shift status is derived automatically: an open (unresolved) incident
   // makes the shift תקלה; once everything is resolved it returns to תקין
@@ -147,14 +171,21 @@ function App() {
     return counts
   }, [activeMessages])
 
+  const operatorCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const m of activeMessages) counts.set(m.operator, (counts.get(m.operator) ?? 0) + 1)
+    return counts
+  }, [activeMessages])
+
   const filteredMessages = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     return activeMessages.filter((m) => {
       if (tagFilter !== 'all' && (m.tag ?? 'update') !== tagFilter) return false
+      if (operatorFilter !== 'all' && m.operator !== operatorFilter) return false
       if (!query) return true
       return m.text.toLowerCase().includes(query) || m.operator.toLowerCase().includes(query)
     })
-  }, [activeMessages, searchQuery, tagFilter])
+  }, [activeMessages, searchQuery, tagFilter, operatorFilter])
 
   // A message is mergeable when the message directly before it (in the full,
   // unfiltered feed) is from the same operator
@@ -168,17 +199,35 @@ function App() {
     return ids
   }, [activeMessages])
 
-  const handleSend = (text: string, tag: MessageTag, attachments: MessageAttachment[]) => {
+  const handleSend = (text: string, tag: MessageTag, attachments: MessageAttachment[], extras: SendExtras) => {
     if (!selectedOperator) return
-    addMessage(dateKey, activeTab, {
+    const targetDate = extras.targetDateKey ?? dateKey
+    const targetShift = extras.targetShiftId ?? activeTab
+    const sentElsewhere = targetDate !== dateKey || targetShift !== activeTab
+    addMessage(targetDate, targetShift, {
       operator: selectedOperator,
       text,
       tag,
       // Incidents open as unresolved — this flips the shift status to תקלה
       // until someone marks them as resolved
       unresolved: tag === 'incident' ? true : undefined,
+      incidentId: extras.incidentId,
+      scheduled: sentElsewhere || undefined,
       attachments: attachments.length > 0 ? attachments : undefined,
     })
+    if (sentElsewhere) {
+      const shiftLabel = SHIFT_DEFINITIONS.find((d) => d.id === targetShift)!.label
+      showToast(`נשלח ל${shiftLabel} · ${formatDateShort(targetDate)}`)
+    }
+  }
+
+  const handleToggleAck = (id: string) => {
+    const m = activeMessages.find((x) => x.id === id)
+    if (!m || !selectedOperator) return
+    const acks = new Set(m.acks ?? [])
+    if (acks.has(selectedOperator)) acks.delete(selectedOperator)
+    else acks.add(selectedOperator)
+    updateMessage(dateKey, activeTab, id, { acks: [...acks] })
   }
 
   const handleResolveCarryOver = (item: CarryOverItem) => {
@@ -187,8 +236,9 @@ function App() {
   }
 
   const handleCopyTicketUpdate = async () => {
-    const message = generateTicketUpdate(activeShiftDef, activeMessages)
-    const ok = await copyToClipboard(message)
+    const plain = generateTicketUpdate(activeShiftDef, activeMessages)
+    const html = generateTicketUpdateHtml(activeShiftDef, activeMessages)
+    const ok = await copyRichText(plain, html)
     if (ok) showToast('הועתק ללוח!')
   }
 
@@ -218,6 +268,8 @@ function App() {
         tasksOpen={tasksOpen}
         openTaskCount={tasks.filter((t) => !isTaskDone(t, dateKey)).length}
         onSignOut={signOut}
+        onOpenContacts={() => setContactsOpen(true)}
+        onOpenRunbook={() => setRunbookOpen(true)}
       />
 
       {!firebaseEnabled && (
@@ -268,6 +320,25 @@ function App() {
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 </span>
                 חזרה למשמרת הפעילה
+              </button>
+            )}
+
+            {handoverAck ? (
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-600 ring-1 ring-emerald-500/30 dark:text-emerald-400">
+                <Hand className="h-3 w-3" />
+                התקבלה ע"י {handoverAck.operator} · {formatTime(handoverAck.at)}
+              </span>
+            ) : (
+              <button
+                onClick={() => {
+                  acceptShift(dateKey, activeTab, selectedOperator)
+                  showToast('המשמרת התקבלה ✋')
+                }}
+                title="אישור קבלת המשמרת — נרשם עם שם ושעה"
+                className="flex items-center gap-1 rounded-full border border-noc-accent/50 bg-noc-accent/10 px-2.5 py-1 text-[11px] font-bold text-noc-accent transition-colors hover:bg-noc-accent/20"
+              >
+                <Hand className="h-3 w-3" />
+                קבלת משמרת
               </button>
             )}
           </div>
@@ -336,6 +407,26 @@ function App() {
                 </button>
               )
             })}
+
+          {operatorCounts.size > 1 && <span className="mx-1 h-4 w-px bg-noc-border" />}
+          {operatorCounts.size > 1 &&
+            [...operatorCounts.entries()].map(([name, count]) => {
+              const selected = operatorFilter === name
+              return (
+                <button
+                  key={name}
+                  onClick={() => setOperatorFilter(selected ? 'all' : name)}
+                  title={`הצגת הודעות של ${name} בלבד`}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
+                    selected
+                      ? colorForOperator(name)
+                      : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+                  }`}
+                >
+                  {name} ({count})
+                </button>
+              )
+            })}
         </div>
 
         {/* Shift-change prompt */}
@@ -373,6 +464,7 @@ function App() {
             carryOver={carryOver}
             mergeableIds={mergeableIds}
             highlightTerm={searchQuery}
+            currentOperator={selectedOperator}
             onDeleteMessage={(id) => {
               const m = activeMessages.find((x) => x.id === id)
               if (!m) return
@@ -411,6 +503,8 @@ function App() {
               updateMessage(dateKey, activeTab, id, { text: newText, edited: true })
               showToast('ההודעה עודכנה')
             }}
+            onToggleAck={handleToggleAck}
+            onOpenThread={setThreadId}
             onResolveCarryOver={handleResolveCarryOver}
           />
         </div>
@@ -418,6 +512,10 @@ function App() {
         <ChatInputBar
           operators={operators}
           selectedOperator={selectedOperator}
+          draftKey={`${dateKey}_${activeTab}`}
+          openIncidents={openIncidents}
+          currentDateKey={dateKey}
+          currentShiftId={activeTab}
           onSelectOperator={setSelectedOperator}
           onAddOperator={addOperator}
           onSend={handleSend}
@@ -462,6 +560,14 @@ function App() {
         }}
       />
 
+      <ContactsPanel open={contactsOpen} onClose={() => setContactsOpen(false)} api={contactsApi} />
+      <RunbookPanel open={runbookOpen} onClose={() => setRunbookOpen(false)} api={runbookApi} onCopied={() => showToast('הנוהל הועתק!')} />
+      <IncidentThreadModal
+        incidentId={threadId}
+        messages={activeMessages}
+        onClose={() => setThreadId(null)}
+        onCopied={() => showToast('ציר הזמן הועתק!')}
+      />
       <Toast toast={toast} />
     </div>
   )

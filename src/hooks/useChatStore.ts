@@ -83,6 +83,9 @@ function docToMessage(id: string, data: DocumentData): ChatMessage {
     pinned: Boolean(data.pinned),
     unresolved: Boolean(data.unresolved),
     edited: Boolean(data.edited),
+    acks: Array.isArray(data.acks) && data.acks.length > 0 ? (data.acks as string[]) : undefined,
+    incidentId: (data.incident_id as string) || undefined,
+    scheduled: Boolean(data.scheduled),
     attachments: Array.isArray(data.attachments) && data.attachments.length > 0 ? data.attachments : undefined,
   }
 }
@@ -98,6 +101,9 @@ function messageToDocFields(dateKey: string, shiftId: ShiftId, m: Omit<ChatMessa
     tag: m.tag ?? 'update',
     pinned: Boolean(m.pinned),
     unresolved: Boolean(m.unresolved),
+    acks: m.acks ?? [],
+    incident_id: m.incidentId ?? null,
+    scheduled: Boolean(m.scheduled),
     attachments: m.attachments ?? [],
   }
 }
@@ -110,6 +116,9 @@ function patchToDocFields(patch: Partial<ChatMessage>) {
   if (patch.pinned !== undefined) fields.pinned = patch.pinned
   if (patch.unresolved !== undefined) fields.unresolved = patch.unresolved
   if (patch.edited !== undefined) fields.edited = patch.edited
+  if (patch.acks !== undefined) fields.acks = patch.acks ?? []
+  if (patch.incidentId !== undefined) fields.incident_id = patch.incidentId ?? null
+  if (patch.scheduled !== undefined) fields.scheduled = patch.scheduled
   if (patch.attachments !== undefined) fields.attachments = patch.attachments ?? []
   return fields
 }
@@ -238,6 +247,9 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
       pinned: Boolean(message.pinned),
       unresolved: Boolean(message.unresolved),
       edited: Boolean(message.edited),
+      acks: message.acks ?? [],
+      incident_id: message.incidentId ?? null,
+      scheduled: Boolean(message.scheduled),
       attachments: message.attachments ?? [],
     }).catch(() => setStorageError(true))
   }, [])
