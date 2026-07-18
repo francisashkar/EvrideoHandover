@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, ClipboardEvent as ClipboardPasteEvent, KeyboardEvent } from 'react'
-import { Plus, Send, Paperclip, X, FileText, Loader2, Zap, ChevronDown, Check, Clock, Link2 } from 'lucide-react'
+import { Plus, Send, Paperclip, X, FileText, Loader2, Zap, ChevronDown, Check, Clock, Link2, Pencil, Trash2 } from 'lucide-react'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseEnabled, storage } from '../firebase'
 import type { MessageAttachment, MessageTag, ShiftId } from '../types'
@@ -33,6 +33,8 @@ interface ChatInputBarProps {
   currentShiftId: ShiftId
   onSelectOperator: (name: string) => void
   onAddOperator: (name: string) => void
+  onRenameOperator: (oldName: string, newName: string) => void
+  onDeleteOperator: (name: string) => void
   onSend: (text: string, tag: MessageTag, attachments: MessageAttachment[], extras: SendExtras) => void
   onFileError: (message: string) => void
 }
@@ -85,6 +87,8 @@ export default function ChatInputBar({
   currentShiftId,
   onSelectOperator,
   onAddOperator,
+  onRenameOperator,
+  onDeleteOperator,
   onSend,
   onFileError,
 }: ChatInputBarProps) {
@@ -97,6 +101,12 @@ export default function ChatInputBar({
   const [newTemplate, setNewTemplate] = useState('')
   const [addingOperator, setAddingOperator] = useState(false)
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false)
+  const [editingOperator, setEditingOperator] = useState<string | null>(null)
+  const [editOperatorValue, setEditOperatorValue] = useState('')
+  const [deletingOperator, setDeletingOperator] = useState<string | null>(null)
+  const [hasMoreBelow, setHasMoreBelow] = useState(false)
+  const operatorListRef = useRef<HTMLDivElement>(null)
+  const selectedOperatorRowRef = useRef<HTMLDivElement>(null)
   const [incidentLink, setIncidentLink] = useState('')
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [schedDate, setSchedDate] = useState(currentDateKey)
@@ -169,6 +179,30 @@ export default function ChatInputBar({
     if (!trimmed) return
     setTemplates((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]))
     setNewTemplate('')
+  }
+
+  const updateScrollHint = () => {
+    const el = operatorListRef.current
+    if (!el) return
+    setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 8)
+  }
+
+  // When the picker opens: reset edit state, scroll the selected operator into
+  // view, and compute whether a scroll hint is needed
+  useEffect(() => {
+    if (!operatorMenuOpen) return
+    setEditingOperator(null)
+    setDeletingOperator(null)
+    requestAnimationFrame(() => {
+      selectedOperatorRowRef.current?.scrollIntoView({ block: 'nearest' })
+      updateScrollHint()
+    })
+  }, [operatorMenuOpen])
+
+  const confirmRenameOperator = (oldName: string) => {
+    const clean = editOperatorValue.trim()
+    if (clean && clean !== oldName) onRenameOperator(oldName, clean)
+    setEditingOperator(null)
   }
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && uploadingCount === 0
@@ -550,41 +584,137 @@ export default function ChatInputBar({
           {operatorMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setOperatorMenuOpen(false)} />
-              <div className="absolute bottom-full start-0 z-50 mb-2 w-56 overflow-hidden rounded-xl border border-noc-border bg-noc-panel2 shadow-2xl">
+              <div className="absolute bottom-full start-0 z-50 mb-2 w-64 overflow-hidden rounded-xl border border-noc-border bg-noc-panel2 shadow-2xl">
                 <p className="border-b border-noc-border bg-noc-panel3/50 px-3 py-1.5 text-[10px] font-bold text-noc-t3">
-                  מי כותב עכשיו?
+                  מי כותב עכשיו? ({operators.length} נוקיסטים)
                 </p>
-                <div className="max-h-64 overflow-y-auto scrollbar-thin">
-                  {operators.map((name) => {
-                    const selected = name === selectedOperator
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => {
-                          onSelectOperator(name)
-                          setOperatorMenuOpen(false)
-                        }}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-start transition-colors ${
-                          selected ? 'bg-noc-accent/10' : 'hover:bg-noc-panel3'
-                        }`}
-                      >
-                        <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ${colorForOperator(name)}`}
-                        >
-                          {name.charAt(0)}
-                        </span>
-                        <span
-                          className={`min-w-0 flex-1 truncate text-sm ${
-                            selected ? 'font-bold text-noc-accent' : 'font-medium text-noc-t1'
+                <div className="relative">
+                  <div
+                    ref={operatorListRef}
+                    onScroll={updateScrollHint}
+                    className="max-h-72 overflow-y-auto scrollbar-thin"
+                  >
+                    {operators.map((name) => {
+                      const selected = name === selectedOperator
+                      if (editingOperator === name) {
+                        return (
+                          <div key={name} className="flex items-center gap-1.5 px-3 py-2">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={editOperatorValue}
+                              onChange={(e) => setEditOperatorValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  confirmRenameOperator(name)
+                                }
+                                if (e.key === 'Escape') setEditingOperator(null)
+                              }}
+                              className="h-8 min-w-0 flex-1 rounded-md border border-noc-accent/50 bg-noc-bg/40 px-2 text-sm text-noc-t1 outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => confirmRenameOperator(name)}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-noc-accent text-white"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingOperator(null)}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-noc-border text-noc-t3"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )
+                      }
+                      return (
+                        <div
+                          key={name}
+                          ref={selected ? selectedOperatorRowRef : undefined}
+                          className={`group/op flex w-full items-center gap-1.5 pe-2 transition-colors ${
+                            selected ? 'bg-noc-accent/10' : 'hover:bg-noc-panel3'
                           }`}
                         >
-                          {name}
-                        </span>
-                        {selected && <Check className="h-4 w-4 shrink-0 text-noc-accent" />}
-                      </button>
-                    )
-                  })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectOperator(name)
+                              setOperatorMenuOpen(false)
+                            }}
+                            className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-start"
+                          >
+                            <span
+                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ${colorForOperator(name)}`}
+                            >
+                              {name.charAt(0)}
+                            </span>
+                            <span
+                              className={`min-w-0 flex-1 truncate text-sm ${
+                                selected ? 'font-bold text-noc-accent' : 'font-medium text-noc-t1'
+                              }`}
+                            >
+                              {name}
+                            </span>
+                            {selected && <Check className="h-4 w-4 shrink-0 text-noc-accent" />}
+                          </button>
+                          {deletingOperator === name ? (
+                            <span className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onDeleteOperator(name)
+                                  setDeletingOperator(null)
+                                }}
+                                title="אישור מחיקה"
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500/20 text-red-400"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingOperator(null)}
+                                title="ביטול"
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-noc-border text-noc-t3"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/op:opacity-100">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditOperatorValue(name)
+                                  setEditingOperator(name)
+                                }}
+                                title="שינוי שם"
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-noc-t4 hover:bg-noc-accent/15 hover:text-noc-accent"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingOperator(name)}
+                                title="מחיקת נוקיסט"
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-noc-t4 hover:bg-red-500/10 hover:text-red-400"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Scroll hint — fades + bounces when more operators are below */}
+                  {hasMoreBelow && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-10 items-end justify-center bg-gradient-to-t from-noc-panel2 to-transparent pb-0.5">
+                      <ChevronDown className="h-4 w-4 animate-bounce text-noc-accent" />
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"

@@ -36,7 +36,14 @@ function App() {
   const [dateKey, setDateKey] = useState<string>(() => shiftDateKey())
   const [now, setNow] = useState(new Date())
   const [activeTab, setActiveTab] = useState<ShiftId>(() => getActiveShiftId())
-  const [selectedOperator, setSelectedOperator] = useState<string>('')
+  // The chosen operator is remembered per station (browser)
+  const [selectedOperator, setSelectedOperator] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem('noc-selected-operator') ?? ''
+    } catch {
+      return ''
+    }
+  })
   const [toast, setToast] = useState<ToastState | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [overviewOpen, setOverviewOpen] = useState(false)
@@ -63,7 +70,7 @@ function App() {
     searchAll,
     storageError,
   } = useChatStore(dateKey)
-  const { operators, addOperator } = useOperators()
+  const { operators, addOperator, renameOperator, deleteOperator } = useOperators()
   const { theme, toggleTheme } = useTheme()
   const { tasks, addTask, updateTask, toggleTask, deleteTask } = useTasks()
   const { state: authState, signIn, signOut } = useAuth()
@@ -83,7 +90,17 @@ function App() {
   }
 
   useEffect(() => {
-    if (!selectedOperator && operators.length > 0) setSelectedOperator(operators[0])
+    try {
+      if (selectedOperator) window.localStorage.setItem('noc-selected-operator', selectedOperator)
+    } catch {
+      // ignore
+    }
+  }, [selectedOperator])
+
+  useEffect(() => {
+    if (operators.length === 0) return
+    // No selection yet, or the remembered operator was removed from the roster
+    if (!selectedOperator || !operators.includes(selectedOperator)) setSelectedOperator(operators[0])
   }, [operators, selectedOperator])
 
   useEffect(() => {
@@ -517,7 +534,19 @@ function App() {
           currentDateKey={dateKey}
           currentShiftId={activeTab}
           onSelectOperator={setSelectedOperator}
-          onAddOperator={addOperator}
+          onAddOperator={(name) => {
+            addOperator(name)
+            showToast(`${name.trim()} נוסף לרשימת הנוקיסטים`)
+          }}
+          onRenameOperator={(oldName, newName) => {
+            renameOperator(oldName, newName)
+            if (selectedOperator === oldName) setSelectedOperator(newName.trim())
+            showToast('שם הנוקיסט עודכן')
+          }}
+          onDeleteOperator={(name) => {
+            deleteOperator(name)
+            showToast(`${name} הוסר מהרשימה`)
+          }}
           onSend={handleSend}
           onFileError={(msg) => showToast(msg, 'error')}
         />
