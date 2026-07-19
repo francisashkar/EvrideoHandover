@@ -590,7 +590,7 @@ function App() {
       />
 
       <ContactsPanel open={contactsOpen} onClose={() => setContactsOpen(false)} api={contactsApi} />
-      <RunbookPanel open={runbookOpen} onClose={() => setRunbookOpen(false)} api={runbookApi} onCopied={() => showToast('הנוהל הועתק!')} />
+      <RunbookPanel open={runbookOpen} onClose={() => setRunbookOpen(false)} api={runbookApi} onCopied={() => showToast('הנוהל הועתק!')} onError={(msg) => showToast(msg, 'error')} />
       <IncidentThreadModal
         incidentId={threadId}
         messages={activeMessages}

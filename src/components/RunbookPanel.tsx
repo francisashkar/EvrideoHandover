@@ -1,24 +1,32 @@
 import { useMemo, useState } from 'react'
-import { X, BookOpen, Plus, Pencil, Trash2, Check, Copy, Search, ChevronDown } from 'lucide-react'
+import type { ClipboardEvent as ClipboardPasteEvent } from 'react'
+import { X, BookOpen, Plus, Pencil, Trash2, Check, Copy, Search, ChevronDown, Loader2, ImagePlus } from 'lucide-react'
 import type { RunbookApi, RunbookEntry, RunbookInput } from '../hooks/useRunbook'
 import { copyToClipboard } from '../clipboard'
 import HighlightText from './HighlightText'
+import { filesFromClipboard, processAttachmentFile } from '../attachments'
+import { attachmentSrc } from '../types'
+import type { MessageAttachment } from '../types'
 
 interface RunbookPanelProps {
   open: boolean
   onClose: () => void
   api: RunbookApi
   onCopied: () => void
+  onError: (message: string) => void
 }
 
-const EMPTY: RunbookInput = { title: '', category: '', content: '' }
+const EMPTY: RunbookInput = { title: '', category: '', content: '', images: [] }
+const MAX_IMAGES = 8
 
-export default function RunbookPanel({ open, onClose, api, onCopied }: RunbookPanelProps) {
+export default function RunbookPanel({ open, onClose, api, onCopied, onError }: RunbookPanelProps) {
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [form, setForm] = useState<RunbookInput>(EMPTY)
+  const [uploadingCount, setUploadingCount] = useState(0)
+  const [lightbox, setLightbox] = useState<MessageAttachment | null>(null)
 
   const categories = useMemo(
     () => [...new Set(api.entries.map((e) => e.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
@@ -46,12 +54,30 @@ export default function RunbookPanel({ open, onClose, api, onCopied }: RunbookPa
   }
 
   const startEdit = (e: RunbookEntry) => {
-    setForm({ title: e.title, category: e.category, content: e.content })
+    setForm({ title: e.title, category: e.category, content: e.content, images: e.images ?? [] })
     setEditingId(e.id)
   }
 
+  /** Paste a screenshot straight into the procedure being edited */
+  const handlePasteImage = async (e: ClipboardPasteEvent) => {
+    const files = filesFromClipboard(e.clipboardData).filter((f) => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    e.preventDefault()
+    for (const file of files) {
+      if (form.images.length + uploadingCount >= MAX_IMAGES) {
+        onError(`עד ${MAX_IMAGES} תמונות לנוהל`)
+        break
+      }
+      setUploadingCount((c) => c + 1)
+      const result = await processAttachmentFile(file)
+      setUploadingCount((c) => c - 1)
+      if (result.ok) setForm((f) => ({ ...f, images: [...f.images, result.attachment] }))
+      else onError(result.error)
+    }
+  }
+
   const save = () => {
-    if (!form.title.trim() || !form.content.trim()) return
+    if (!form.title.trim() || !form.content.trim() || uploadingCount > 0) return
     if (editingId === 'new') api.addEntry(form)
     else if (editingId) api.updateEntry(editingId, form)
     setEditingId(null)
@@ -160,15 +186,46 @@ export default function RunbookPanel({ open, onClose, api, onCopied }: RunbookPa
               <textarea
                 value={form.content}
                 onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                placeholder={'השלבים, שורה אחרי שורה:\n1. ...\n2. ...'}
+                onPaste={handlePasteImage}
+                placeholder={'השלבים, שורה אחרי שורה (Ctrl+V להדבקת צילום מסך):\n1. ...\n2. ...'}
                 rows={7}
                 className="w-full rounded-lg border border-noc-border bg-noc-bg/40 px-2.5 py-2 text-sm leading-relaxed text-noc-t1 placeholder-noc-t4 outline-none focus:border-noc-accent"
                 style={{ resize: 'none' }}
               />
+              {(form.images.length > 0 || uploadingCount > 0) && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {form.images.map((img) => (
+                    <span key={img.id} className="group/img relative">
+                      <img
+                        src={attachmentSrc(img)}
+                        alt={img.name}
+                        className="h-14 w-14 rounded-lg border border-noc-border object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, images: f.images.filter((i) => i.id !== img.id) }))}
+                        title="הסרת תמונה"
+                        className="absolute -top-1.5 -left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover/img:opacity-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {uploadingCount > 0 && (
+                    <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-noc-accent/50">
+                      <Loader2 className="h-4 w-4 animate-spin text-noc-accent" />
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-[10px] text-noc-t4">
+                    <ImagePlus className="h-3 w-3" />
+                    Ctrl+V להוספה
+                  </span>
+                </div>
+              )}
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={save}
-                  disabled={!form.title.trim() || !form.content.trim()}
+                  disabled={!form.title.trim() || !form.content.trim() || uploadingCount > 0}
                   className="flex items-center gap-1 rounded-full bg-noc-accent px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
                 >
                   <Check className="h-3.5 w-3.5" /> שמירה
@@ -211,6 +268,12 @@ export default function RunbookPanel({ open, onClose, api, onCopied }: RunbookPa
                             {e.category}
                           </span>
                         )}
+                        {(e.images?.length ?? 0) > 0 && (
+                          <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-noc-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-noc-accent ring-1 ring-noc-accent/30">
+                            <ImagePlus className="h-2.5 w-2.5" />
+                            {e.images.length}
+                          </span>
+                        )}
                       </button>
                       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                         <button
@@ -241,6 +304,21 @@ export default function RunbookPanel({ open, onClose, api, onCopied }: RunbookPa
                         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-noc-t2">
                           <HighlightText text={e.content} term={query} />
                         </p>
+                        {(e.images?.length ?? 0) > 0 && (
+                          <div className="mt-2.5 flex flex-wrap gap-2">
+                            {e.images.map((img) => (
+                              <button
+                                key={img.id}
+                                type="button"
+                                onClick={() => setLightbox(img)}
+                                title={`${img.name} — לחצו להגדלה`}
+                                className="cursor-zoom-in overflow-hidden rounded-lg border border-noc-border transition-opacity hover:opacity-90"
+                              >
+                                <img src={attachmentSrc(img)} alt={img.name} className="h-24 max-w-40 object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -250,6 +328,30 @@ export default function RunbookPanel({ open, onClose, api, onCopied }: RunbookPa
           )}
         </div>
       </div>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm sm:p-10"
+          onClick={() => setLightbox(null)}
+        >
+          <img
+            src={attachmentSrc(lightbox)}
+            alt={lightbox.name}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          />
+          <button
+            onClick={() => setLightbox(null)}
+            title="סגירה"
+            className="absolute top-4 left-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <p className="absolute bottom-4 max-w-[80%] truncate rounded-full bg-black/50 px-4 py-1.5 text-xs text-white/80">
+            {lightbox.name}
+          </p>
+        </div>
+      )}
     </>
   )
 }

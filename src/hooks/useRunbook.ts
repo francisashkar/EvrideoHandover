@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore'
 import type { DocumentData } from 'firebase/firestore'
 import { db, firebaseEnabled, RUNBOOK_COLLECTION } from '../firebase'
+import type { MessageAttachment } from '../types'
 
 const STORAGE_KEY = 'noc-runbook'
 
@@ -10,11 +11,12 @@ export interface RunbookEntry {
   title: string
   category: string
   content: string
+  images: MessageAttachment[]
   createdAt: number
   updatedAt: number
 }
 
-export type RunbookInput = Pick<RunbookEntry, 'title' | 'category' | 'content'>
+export type RunbookInput = Pick<RunbookEntry, 'title' | 'category' | 'content' | 'images'>
 
 export interface RunbookApi {
   entries: RunbookEntry[]
@@ -29,6 +31,7 @@ function docToEntry(id: string, data: DocumentData): RunbookEntry {
     title: (data.title as string) ?? '',
     category: (data.category as string) ?? '',
     content: (data.content as string) ?? '',
+    images: Array.isArray(data.images) ? (data.images as MessageAttachment[]) : [],
     createdAt: (data.created_at as number) ?? 0,
     updatedAt: (data.updated_at as number) ?? 0,
   }
