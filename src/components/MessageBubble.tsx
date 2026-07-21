@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy, Pencil, Eye, ListTree, Clock, Link2 } from 'lucide-react'
+import { Trash2, Check, X, Pin, CircleAlert, CheckCircle2, FileText, Download, Merge, Copy, Pencil, Eye, ListTree, Clock, Link2 } from 'lucide-react'
 import type { ChatMessage, MessageAttachment } from '../types'
-import { TAG_META, attachmentSrc, colorForOperator } from '../types'
+import { attachmentSrc, colorForOperator, tagMetaOf } from '../types'
+import type { TagDef } from '../types'
 import { formatTime } from '../dateUtils'
 import HighlightText from './HighlightText'
 
@@ -22,6 +23,7 @@ interface MessageBubbleProps {
   canMerge: boolean
   highlightTerm: string
   currentOperator: string
+  tags: TagDef[]
   onDelete: () => void
   onTogglePin: () => void
   onToggleUnresolved: () => void
@@ -37,6 +39,7 @@ export default function MessageBubble({
   highlightTerm,
   canMerge,
   currentOperator,
+  tags,
   onDelete,
   onTogglePin,
   onToggleUnresolved,
@@ -53,7 +56,7 @@ export default function MessageBubble({
   const editRef = useRef<HTMLTextAreaElement>(null)
   const rtl = isRtlText(message.text) || message.text === ''
   const badgeColor = colorForOperator(message.operator)
-  const tagMeta = message.tag && message.tag !== 'update' ? TAG_META[message.tag] : null
+  const tagMeta = message.tag && message.tag !== 'update' ? tagMetaOf(tags, message.tag) : null
   // Unresolved marking is reserved for incident-tagged messages
   // (still shown when already unresolved so it can be cleared)
   const canToggleUnresolved = message.tag === 'incident' || !!message.unresolved
@@ -127,6 +130,14 @@ export default function MessageBubble({
           )}
           {message.pinned && <Pin className="h-3 w-3 fill-current text-noc-accent" />}
           {message.unresolved && <CircleAlert className="h-3 w-3 text-amber-400" />}
+          {message.tag === 'incident' && message.unresolved === false && (
+            <span
+              title="התקלה טופלה"
+              className="flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-500 ring-1 ring-emerald-500/30 dark:text-emerald-400"
+            >
+              <CheckCircle2 className="h-2.5 w-2.5" /> טופלה
+            </span>
+          )}
           <span className="text-[10px] text-noc-t3">{formatTime(message.timestamp)}</span>
           {message.edited && <span className="text-[9px] text-noc-t4">(נערך)</span>}
           {message.scheduled && (

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -23,7 +22,7 @@ const STORAGE_KEY = 'noc-chat-store'
 
 export interface ChatStoreApi {
   getDayMessages: (dateKey: string) => DayMessages
-  addMessage: (dateKey: string, shiftId: ShiftId, message: Omit<ChatMessage, 'id' | 'timestamp'>) => void
+  addMessage: (dateKey: string, shiftId: ShiftId, message: Omit<ChatMessage, 'id' | 'timestamp'>) => string
   updateMessage: (dateKey: string, shiftId: ShiftId, messageId: string, patch: Partial<ChatMessage>) => void
   deleteMessage: (dateKey: string, shiftId: ShiftId, messageId: string) => void
   mergeWithPrevious: (dateKey: string, shiftId: ShiftId, messageId: string) => void
@@ -179,11 +178,13 @@ function useFirestoreChatStore(activeDateKey: string): ChatStoreApi {
   const getDayMessages = useCallback(() => dayMessages, [dayMessages])
 
   const addMessage = useCallback(
-    (dateKey: string, shiftId: ShiftId, message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
-      if (!db) return
-      addDoc(collection(db, MESSAGES_COLLECTION), messageToDocFields(dateKey, shiftId, message)).catch(() =>
-        setStorageError(true),
-      )
+    (dateKey: string, shiftId: ShiftId, message: Omit<ChatMessage, 'id' | 'timestamp'>): string => {
+      if (!db) return ''
+      // Pre-generate the id client-side so callers (e.g. auto-creating a linked
+      // incident) can reference this message synchronously, before the write lands
+      const docRef = doc(collection(db, MESSAGES_COLLECTION))
+      setDoc(docRef, messageToDocFields(dateKey, shiftId, message)).catch(() => setStorageError(true))
+      return docRef.id
     },
     [],
   )
@@ -337,7 +338,7 @@ function useLocalChatStore(): ChatStoreApi {
   )
 
   const addMessage = useCallback(
-    (dateKey: string, shiftId: ShiftId, message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    (dateKey: string, shiftId: ShiftId, message: Omit<ChatMessage, 'id' | 'timestamp'>): string => {
       const full: ChatMessage = {
         ...message,
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -350,6 +351,7 @@ function useLocalChatStore(): ChatStoreApi {
           [dateKey]: { ...day, [shiftId]: [...day[shiftId], full] },
         }
       })
+      return full.id
     },
     [],
   )

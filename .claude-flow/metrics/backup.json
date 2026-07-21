@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-07-18T23:59:28.191Z",
+  "timestamp": "2026-07-20T23:59:28.228Z",
   "backedUp": false,
   "sizeBytes": 0,
   "rotatedAway": 0,
-  "skipped": "no-db"
+  "skipped": "better-sqlite3 unavailable"
 }

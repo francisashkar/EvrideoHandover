@@ -16,17 +16,22 @@ import GlobalSearchModal from './components/GlobalSearchModal'
 import ContactsPanel from './components/ContactsPanel'
 import RunbookPanel from './components/RunbookPanel'
 import IncidentThreadModal from './components/IncidentThreadModal'
+import IncidentBoard from './components/IncidentBoard'
+import IncidentArchive from './components/IncidentArchive'
+import ResolutionModal from './components/ResolutionModal'
 import { useAuth } from './hooks/useAuth'
 import { useContacts } from './hooks/useContacts'
 import { useRunbook } from './hooks/useRunbook'
 import { useHandover } from './hooks/useHandover'
+import { useTags } from './hooks/useTags'
+import { useIncidents } from './hooks/useIncidents'
 import { useChatStore } from './hooks/useChatStore'
 import { useOperators } from './hooks/useOperators'
 import { useTasks, isTaskDone } from './hooks/useTasks'
 import { useTheme } from './hooks/useTheme'
 import { firebaseEnabled } from './firebase'
-import { SHIFT_DEFINITIONS, STATUS_META, TAG_META, colorForOperator } from './types'
-import type { CarryOverItem, MessageAttachment, MessageTag, ShiftId, ShiftStatus } from './types'
+import { SHIFT_DEFINITIONS, STATUS_META, colorForOperator } from './types'
+import type { CarryOverItem, IncidentItem, IncidentResolution, MessageAttachment, MessageTag, ShiftId, ShiftStatus } from './types'
 import type { SendExtras } from './components/ChatInputBar'
 import { getActiveShiftId, shiftDateKey, formatTime, formatDateShort } from './dateUtils'
 import { copyToClipboard, copyRichText } from './clipboard'
@@ -55,6 +60,9 @@ function App() {
   const [contactsOpen, setContactsOpen] = useState(false)
   const [runbookOpen, setRunbookOpen] = useState(false)
   const [threadId, setThreadId] = useState<string | null>(null)
+  const [incidentBoardOpen, setIncidentBoardOpen] = useState(false)
+  const [incidentArchiveOpen, setIncidentArchiveOpen] = useState(false)
+  const [resolvingIncident, setResolvingIncident] = useState<IncidentItem | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const skipSearchClearRef = useRef(false)
   const prevLiveShiftRef = useRef<ShiftId | null>(null)
@@ -77,6 +85,9 @@ function App() {
   const contactsApi = useContacts()
   const runbookApi = useRunbook()
   const { getAck, acceptShift } = useHandover()
+  const tagsApi = useTags()
+  const { tags } = tagsApi
+  const incidentsApi = useIncidents()
 
   const showToast = (
     text: string,
@@ -148,6 +159,10 @@ function App() {
   const carryOver = getCarryOver(dateKey, activeTab)
   const handoverAck = getAck(dateKey, activeTab)
 
+  // Open incidents, offered in the chat composer so a follow-up message can be
+  // linked to one. The id used here is the original incident-tagged message's
+  // id (message.incidentId) — it doubles as both the chat-thread key
+  // (IncidentThreadModal) and, via findBySource, the incident board's item
   const openIncidents = useMemo(
     () =>
       activeMessages
@@ -221,7 +236,7 @@ function App() {
     const targetDate = extras.targetDateKey ?? dateKey
     const targetShift = extras.targetShiftId ?? activeTab
     const sentElsewhere = targetDate !== dateKey || targetShift !== activeTab
-    addMessage(targetDate, targetShift, {
+    const messageId = addMessage(targetDate, targetShift, {
       operator: selectedOperator,
       text,
       tag,
@@ -232,6 +247,28 @@ function App() {
       scheduled: sentElsewhere || undefined,
       attachments: attachments.length > 0 ? attachments : undefined,
     })
+    // A message tagged "incident" is automatically tracked on the incident
+    // board until someone resolves it there (or from the chat bubble). The
+    // full message becomes the title — no truncation, so nothing is cut off.
+    if (tag === 'incident' && messageId) {
+      incidentsApi.addIncident({
+        title: text.trim() || 'תקלה ללא תיאור',
+        urgency: extras.urgency ?? 'medium',
+        createdBy: selectedOperator,
+        source: { kind: 'chat', dateKey: targetDate, shiftId: targetShift, messageId },
+        attachments,
+      })
+    }
+    // A follow-up message explicitly linked to an open incident is appended to
+    // that incident's timeline, so the board reflects updates made from chat.
+    // extras.incidentId is the original incident-tagged message's id (see
+    // openIncidents) — resolve it to the actual board item via its chat source.
+    // The new message's own id is stored on the entry (sourceMessageId) so the
+    // entry can be removed later if this follow-up message gets deleted.
+    if (extras.incidentId && text.trim() && messageId) {
+      const linkedIncident = incidentsApi.findBySource(dateKey, activeTab, extras.incidentId)
+      if (linkedIncident) incidentsApi.addTimelineEntry(linkedIncident.id, text.trim(), selectedOperator, messageId)
+    }
     if (sentElsewhere) {
       const shiftLabel = SHIFT_DEFINITIONS.find((d) => d.id === targetShift)!.label
       showToast(`נשלח ל${shiftLabel} · ${formatDateShort(targetDate)}`)
@@ -248,8 +285,35 @@ function App() {
   }
 
   const handleResolveCarryOver = (item: CarryOverItem) => {
-    updateMessage(item.dateKey, item.shiftId, item.message.id, { unresolved: false })
-    showToast('סומן כטופל')
+    // Same resolution popup as closing from the chat bubble or the incident
+    // board — never resolve silently, always ask how it was resolved
+    const incident = incidentsApi.findBySource(item.dateKey, item.shiftId, item.message.id)
+    if (incident) {
+      setResolvingIncident(incident)
+    } else {
+      updateMessage(item.dateKey, item.shiftId, item.message.id, { unresolved: false })
+      showToast('סומן כטופל')
+    }
+  }
+
+  const handleConfirmResolution = (resolution: IncidentResolution) => {
+    if (!resolvingIncident) return
+    incidentsApi.resolveIncident(resolvingIncident.id, resolution)
+    if (resolvingIncident.source.kind === 'chat') {
+      const { dateKey: dk, shiftId: sid, messageId } = resolvingIncident.source
+      updateMessage(dk, sid, messageId, { unresolved: false })
+    }
+    setResolvingIncident(null)
+    showToast('התקלה נסגרה')
+  }
+
+  const handleJumpToChat = (dk: string, shiftId: ShiftId, messageId: string) => {
+    setDateKey(dk)
+    setActiveTab(shiftId)
+    setIncidentBoardOpen(false)
+    setIncidentArchiveOpen(false)
+    showToast('עברתם להודעה בצ׳אט')
+    void messageId
   }
 
   const handleCopyTicketUpdate = async () => {
@@ -287,6 +351,8 @@ function App() {
         onSignOut={signOut}
         onOpenContacts={() => setContactsOpen(true)}
         onOpenRunbook={() => setRunbookOpen(true)}
+        onOpenIncidents={() => setIncidentBoardOpen(true)}
+        openIncidentCount={incidentsApi.incidents.filter((i) => i.open).length}
       />
 
       {!firebaseEnabled && (
@@ -407,20 +473,19 @@ function App() {
           >
             הכל ({activeMessages.length})
           </button>
-          {(Object.keys(TAG_META) as MessageTag[])
-            .filter((t) => (tagCounts.get(t) ?? 0) > 0)
+          {tags
+            .filter((t) => (tagCounts.get(t.id) ?? 0) > 0)
             .map((t) => {
-              const meta = TAG_META[t]
-              const selected = tagFilter === t
+              const selected = tagFilter === t.id
               return (
                 <button
-                  key={t}
-                  onClick={() => setTagFilter(selected ? 'all' : t)}
+                  key={t.id}
+                  onClick={() => setTagFilter(selected ? 'all' : t.id)}
                   className={`rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
-                    selected ? meta.chip : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+                    selected ? t.chip : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
                   }`}
                 >
-                  {meta.label} ({tagCounts.get(t)})
+                  {t.label} ({tagCounts.get(t.id)})
                 </button>
               )
             })}
@@ -482,11 +547,22 @@ function App() {
             mergeableIds={mergeableIds}
             highlightTerm={searchQuery}
             currentOperator={selectedOperator}
+            tags={tags}
             onDeleteMessage={(id) => {
               const m = activeMessages.find((x) => x.id === id)
               if (!m) return
               const dk = dateKey
               const tab = activeTab
+              if (m.tag === 'incident') {
+                // This message is the incident's creation point — with it gone
+                // there's no origin left, so remove the incident entirely
+                const incident = incidentsApi.findBySource(dk, tab, id)
+                if (incident) incidentsApi.deleteIncident(incident.id)
+              } else if (m.incidentId) {
+                // A follow-up linked to another incident — drop just its timeline entry
+                const linkedIncident = incidentsApi.findBySource(dk, tab, m.incidentId)
+                if (linkedIncident) incidentsApi.removeTimelineEntryBySource(linkedIncident.id, id)
+              }
               deleteMessage(dk, tab, id)
               showToast(
                 'ההודעה נמחקה',
@@ -507,7 +583,30 @@ function App() {
             }}
             onToggleUnresolved={(id) => {
               const m = activeMessages.find((x) => x.id === id)
-              updateMessage(dateKey, activeTab, id, { unresolved: !m?.unresolved })
+              if (!m) return
+              if (!m.unresolved) {
+                // Marking unresolved — put it back on the incident board too,
+                // reopening its existing entry or creating one if none exists
+                updateMessage(dateKey, activeTab, id, { unresolved: true })
+                const existing = incidentsApi.findBySource(dateKey, activeTab, id)
+                if (existing) {
+                  if (!existing.open) incidentsApi.reopenIncident(existing.id)
+                } else {
+                  incidentsApi.addIncident({
+                    title: m.text.trim() || 'תקלה ללא תיאור',
+                    urgency: 'medium',
+                    createdBy: selectedOperator,
+                    source: { kind: 'chat', dateKey, shiftId: activeTab, messageId: id },
+                    attachments: m.attachments,
+                  })
+                }
+                return
+              }
+              // Closing an incident from the chat bubble goes through the same
+              // resolution popup as closing it from the incident board
+              const incident = incidentsApi.findBySource(dateKey, activeTab, id)
+              if (incident) setResolvingIncident(incident)
+              else updateMessage(dateKey, activeTab, id, { unresolved: false })
             }}
             onMergeMessage={(id) => mergeWithPrevious(dateKey, activeTab, id)}
             onCopyMessage={async (id) => {
@@ -529,6 +628,10 @@ function App() {
         <ChatInputBar
           operators={operators}
           selectedOperator={selectedOperator}
+          tags={tags}
+          onAddTag={tagsApi.addTag}
+          onUpdateTag={tagsApi.updateTag}
+          onDeleteTag={tagsApi.deleteTag}
           draftKey={`${dateKey}_${activeTab}`}
           openIncidents={openIncidents}
           currentDateKey={dateKey}
@@ -594,9 +697,38 @@ function App() {
       <IncidentThreadModal
         incidentId={threadId}
         messages={activeMessages}
+        incidents={incidentsApi.incidents}
         onClose={() => setThreadId(null)}
         onCopied={() => showToast('ציר הזמן הועתק!')}
       />
+
+      <IncidentBoard
+        open={incidentBoardOpen}
+        onClose={() => setIncidentBoardOpen(false)}
+        api={incidentsApi}
+        operator={selectedOperator}
+        onError={(msg) => showToast(msg, 'error')}
+        onJumpToChat={handleJumpToChat}
+        onRequestResolve={(incident) => setResolvingIncident(incident)}
+        onOpenArchive={() => {
+          setIncidentBoardOpen(false)
+          setIncidentArchiveOpen(true)
+        }}
+      />
+      <IncidentArchive
+        open={incidentArchiveOpen}
+        onClose={() => setIncidentArchiveOpen(false)}
+        api={incidentsApi}
+        onJumpToChat={handleJumpToChat}
+        onReopened={() => showToast('התקלה נפתחה מחדש')}
+      />
+      <ResolutionModal
+        incident={resolvingIncident}
+        operator={selectedOperator}
+        onClose={() => setResolvingIncident(null)}
+        onResolve={handleConfirmResolution}
+      />
+
       <Toast toast={toast} />
     </div>
   )
