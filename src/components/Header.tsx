@@ -1,4 +1,4 @@
-import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen } from 'lucide-react'
+import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen, AlertTriangle } from 'lucide-react'
 import { firebaseEnabled } from '../firebase'
 import { formatDateLong, shiftDateKey } from '../dateUtils'
 
@@ -16,6 +16,8 @@ interface HeaderProps {
   onSignOut: () => void
   onOpenContacts: () => void
   onOpenRunbook: () => void
+  onOpenIncidents: () => void
+  openIncidentCount: number
 }
 
 export default function Header({
@@ -32,6 +34,8 @@ export default function Header({
   onSignOut,
   onOpenContacts,
   onOpenRunbook,
+  onOpenIncidents,
+  openIncidentCount,
 }: HeaderProps) {
   const timeLabel = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
@@ -76,6 +80,19 @@ export default function Header({
               היום
             </button>
           )}
+
+          <button
+            onClick={onOpenIncidents}
+            title="עמודת תקלות"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full border border-noc-border bg-noc-panel2 text-noc-t2 transition-colors hover:border-red-400/50 hover:text-red-400"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            {openIncidentCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                {openIncidentCount}
+              </span>
+            )}
+          </button>
 
           <button
             onClick={onOpenContacts}

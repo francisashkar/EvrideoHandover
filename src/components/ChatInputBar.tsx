@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, ClipboardEvent as ClipboardPasteEvent, KeyboardEvent } from 'react'
-import { Plus, Send, Paperclip, X, FileText, Loader2, Zap, ChevronDown, Check, Clock, Link2, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Send, Paperclip, X, FileText, Loader2, Zap, ChevronDown, Check, Clock, Link2, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { firebaseEnabled, storage } from '../firebase'
-import type { MessageAttachment, MessageTag, ShiftId } from '../types'
-import { SHIFT_DEFINITIONS } from '../types'
-import { TAG_META, attachmentSrc, colorForOperator } from '../types'
+import type { IncidentUrgency, MessageAttachment, MessageTag, ShiftId } from '../types'
+import { BUILTIN_INCIDENT_TAG, SHIFT_DEFINITIONS, URGENCY_META } from '../types'
+import { attachmentSrc, colorForOperator } from '../types'
+import type { TagDef } from '../types'
 
 // With Firebase, files go to Cloud Storage (only a link is kept in the message) — 10MB cap.
 // In localStorage fallback mode they're stored inline as data URLs, so keep them small.
@@ -15,9 +16,11 @@ const MAX_FILE_LABEL = firebaseEnabled ? '10MB' : '700KB'
 const INLINE_FALLBACK_BYTES = 700 * 1024
 const MAX_FILES = 5
 const MAX_TEXTAREA_HEIGHT = 160
+const URGENCY_ORDER: IncidentUrgency[] = ['critical', 'high', 'medium', 'low']
 
 export interface SendExtras {
   incidentId?: string
+  urgency?: IncidentUrgency
   targetDateKey?: string
   targetShiftId?: ShiftId
 }
@@ -25,6 +28,10 @@ export interface SendExtras {
 interface ChatInputBarProps {
   operators: string[]
   selectedOperator: string
+  tags: TagDef[]
+  onAddTag: (input: { label: string; chip: string; ticketPrefix: string }) => void
+  onUpdateTag: (id: string, input: { label: string; chip: string; ticketPrefix: string }) => void
+  onDeleteTag: (id: string) => void
   /** Unique key of the current date+shift — unsent drafts are kept per key */
   draftKey: string
   /** Open incidents of the current shift, offered for linking follow-ups */
@@ -53,8 +60,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
   })
 }
 
-const TAG_ORDER: MessageTag[] = ['update', 'incident', 'followup', 'maintenance', 'provider', 'hardware']
-
 const TEMPLATES_KEY = 'noc-templates'
 const DEFAULT_TEMPLATES = [
   'ערוץ __ נפל',
@@ -64,6 +69,22 @@ const DEFAULT_TEMPLATES = [
   'בדיקת ערוצים בוצעה — הכל תקין',
   'המשמרת נמסרה ללא תקלות פתוחות',
 ]
+
+
+const TAG_COLOR_PRESETS = [
+  'bg-sky-500/15 text-sky-400 ring-sky-500/30',
+  'bg-red-500/15 text-red-400 ring-red-500/30',
+  'bg-amber-500/15 text-amber-500 ring-amber-500/30',
+  'bg-violet-500/15 text-violet-500 ring-violet-500/30 dark:text-violet-400',
+  'bg-orange-500/15 text-orange-500 ring-orange-500/30 dark:text-orange-400',
+  'bg-rose-500/15 text-rose-500 ring-rose-500/30 dark:text-rose-400',
+  'bg-emerald-500/15 text-emerald-500 ring-emerald-500/30 dark:text-emerald-400',
+  'bg-cyan-500/15 text-cyan-500 ring-cyan-500/30 dark:text-cyan-400',
+]
+
+function nextTagColor(usedCount: number): string {
+  return TAG_COLOR_PRESETS[usedCount % TAG_COLOR_PRESETS.length]
+}
 
 function loadTemplates(): string[] {
   try {
@@ -81,6 +102,10 @@ function loadTemplates(): string[] {
 export default function ChatInputBar({
   operators,
   selectedOperator,
+  tags,
+  onAddTag,
+  onUpdateTag,
+  onDeleteTag,
   draftKey,
   openIncidents,
   currentDateKey,
@@ -94,6 +119,12 @@ export default function ChatInputBar({
 }: ChatInputBarProps) {
   const [text, setText] = useState('')
   const [tag, setTag] = useState<MessageTag>('update')
+  const [urgency, setUrgency] = useState<IncidentUrgency>('medium')
+  const [urgencyPickerOpen, setUrgencyPickerOpen] = useState(false)
+  const [managingTags, setManagingTags] = useState(false)
+  const [newTagLabel, setNewTagLabel] = useState('')
+  const [editingTagId, setEditingTagId] = useState<string | null>(null)
+  const [editTagLabel, setEditTagLabel] = useState('')
   const [attachments, setAttachments] = useState<MessageAttachment[]>([])
   const [uploadingCount, setUploadingCount] = useState(0)
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -108,9 +139,11 @@ export default function ChatInputBar({
   const operatorListRef = useRef<HTMLDivElement>(null)
   const selectedOperatorRowRef = useRef<HTMLDivElement>(null)
   const [incidentLink, setIncidentLink] = useState('')
+  const [incidentLinkMenuOpen, setIncidentLinkMenuOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [schedDate, setSchedDate] = useState(currentDateKey)
   const [schedShift, setSchedShift] = useState<ShiftId>(currentShiftId)
+  const [schedShiftMenuOpen, setSchedShiftMenuOpen] = useState(false)
   const [newOperatorName, setNewOperatorName] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const newOperatorInputRef = useRef<HTMLInputElement>(null)
@@ -211,11 +244,13 @@ export default function ChatInputBar({
     if (!canSend) return
     onSend(text.trim(), tag, attachments, {
       incidentId: incidentLink || undefined,
+      urgency: tag === BUILTIN_INCIDENT_TAG ? urgency : undefined,
       targetDateKey: scheduleOpen ? schedDate : undefined,
       targetShiftId: scheduleOpen ? schedShift : undefined,
     })
     setText('')
     setTag('update')
+    setUrgency('medium')
     setAttachments([])
     setIncidentLink('')
     setScheduleOpen(false)
@@ -320,7 +355,7 @@ export default function ChatInputBar({
 
   if (addingOperator) {
     return (
-      <div className="border-t border-noc-border bg-noc-panel/95 px-4 py-3 backdrop-blur-xl sm:px-6">
+      <div className="border-t border-noc-border bg-noc-panel/95 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           <input
             ref={newOperatorInputRef}
@@ -369,27 +404,180 @@ export default function ChatInputBar({
   }
 
   return (
-    <div className="border-t border-noc-border bg-noc-panel/95 px-4 py-3 backdrop-blur-xl sm:px-6">
+    <div className="border-t border-noc-border bg-noc-panel/95 px-4 py-3 sm:px-6">
       {/* Tag selector + templates + attachment previews */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap items-center gap-1">
-          {TAG_ORDER.map((t) => {
-            const meta = TAG_META[t]
-            const selected = t === tag
+          {tags.map((t) => {
+            const selected = t.id === tag
+            const isIncidentTag = t.id === BUILTIN_INCIDENT_TAG
             return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTag(t)}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
-                  selected ? meta.chip : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
-                }`}
-              >
-                {meta.label}
-              </button>
+              <span key={t.id} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTag(t.id)
+                    if (isIncidentTag) setUrgencyPickerOpen(true)
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
+                    selected ? t.chip : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+                  }`}
+                >
+                  {t.label}
+                  {isIncidentTag && selected && (
+                    <span className="ms-1 opacity-80">· {URGENCY_META[urgency].label}</span>
+                  )}
+                </button>
+                {isIncidentTag && urgencyPickerOpen && selected && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setUrgencyPickerOpen(false)} />
+                    <div className="absolute bottom-full start-0 z-50 mb-2 w-40 overflow-hidden rounded-xl border border-noc-border bg-noc-panel2 shadow-2xl">
+                      <p className="border-b border-noc-border bg-noc-panel3/50 px-3 py-1.5 text-[10px] font-bold text-noc-t3">
+                        רמת דחיפות
+                      </p>
+                      {URGENCY_ORDER.map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => {
+                            setUrgency(u)
+                            setUrgencyPickerOpen(false)
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-start text-xs font-semibold transition-colors hover:bg-noc-panel3 ${
+                            urgency === u ? 'text-noc-t1' : 'text-noc-t3'
+                          }`}
+                        >
+                          <span className={`h-2 w-2 rounded-full ${URGENCY_META[u].dot}`} />
+                          {URGENCY_META[u].label}
+                          {urgency === u && <Check className="ms-auto h-3 w-3 text-noc-accent" />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </span>
             )
           })}
+          <button
+            type="button"
+            onClick={() => setManagingTags((v) => !v)}
+            title="ניהול תיוגים"
+            className={`flex items-center justify-center rounded-full px-2 py-1 ring-1 transition-all ${
+              managingTags
+                ? 'bg-noc-accent/15 text-noc-accent ring-noc-accent/40'
+                : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+            }`}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
         </div>
+
+        {managingTags && (
+          <div className="w-full rounded-xl border border-noc-accent/40 bg-noc-panel2 p-2.5">
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {tags.map((t) =>
+                editingTagId === t.id ? (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-1 rounded-full border border-noc-accent/50 bg-noc-bg/60 py-1 ps-2.5 pe-1"
+                  >
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editTagLabel}
+                      onChange={(e) => setEditTagLabel(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const label = editTagLabel.trim()
+                          if (label) onUpdateTag(t.id, { label, chip: t.chip, ticketPrefix: `[${label}] ` })
+                          setEditingTagId(null)
+                        }
+                        if (e.key === 'Escape') setEditingTagId(null)
+                      }}
+                      className="h-6 w-24 bg-transparent text-xs text-noc-t1 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const label = editTagLabel.trim()
+                        if (label) onUpdateTag(t.id, { label, chip: t.chip, ticketPrefix: `[${label}] ` })
+                        setEditingTagId(null)
+                      }}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-noc-accent text-white"
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingTagId(null)}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-noc-t3 hover:bg-noc-panel3"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    key={t.id}
+                    className={`group/tagrow flex items-center gap-1 rounded-full py-1 ps-2.5 pe-1 text-[11px] font-bold ring-1 ${t.chip}`}
+                  >
+                    <span>{t.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditTagLabel(t.label)
+                        setEditingTagId(t.id)
+                      }}
+                      title="עריכת תיוג"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-60 transition-opacity hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                    </button>
+                    {!t.builtin && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTag(t.id)}
+                        title="מחיקת תיוג"
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-60 transition-opacity hover:bg-red-500/20 hover:opacity-100"
+                      >
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </div>
+                ),
+              )}
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={newTagLabel}
+                onChange={(e) => setNewTagLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const label = newTagLabel.trim()
+                    if (label) onAddTag({ label, chip: nextTagColor(tags.length), ticketPrefix: `[${label}] ` })
+                    setNewTagLabel('')
+                  }
+                }}
+                placeholder="תיוג חדש..."
+                className="h-8 min-w-0 flex-1 rounded-lg border border-noc-border bg-noc-bg/40 px-2 text-xs text-noc-t1 placeholder-noc-t4 outline-none focus:border-noc-accent"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const label = newTagLabel.trim()
+                  if (label) onAddTag({ label, chip: nextTagColor(tags.length), ticketPrefix: `[${label}] ` })
+                  setNewTagLabel('')
+                }}
+                disabled={!newTagLabel.trim()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-noc-gradient text-white disabled:opacity-40"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Quick templates */}
         <div className="relative">
@@ -471,58 +659,158 @@ export default function ChatInputBar({
 
         {/* Link a follow-up to an open incident */}
         {openIncidents.length > 0 && tag !== 'incident' && (
-          <span className="flex items-center gap-1 rounded-full ring-1 ring-noc-border px-1 py-0.5">
-            <Link2 className="h-3 w-3 text-red-400" />
-            <select
-              value={incidentLink}
-              onChange={(e) => setIncidentLink(e.target.value)}
-              className="max-w-44 bg-transparent text-[11px] font-bold text-noc-t3 outline-none"
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIncidentLinkMenuOpen((v) => !v)}
+              className={`flex max-w-52 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
+                incidentLink
+                  ? 'bg-red-500/10 text-red-400 ring-red-500/40'
+                  : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+              }`}
             >
-              <option value="">ללא שיוך לתקלה</option>
-              {openIncidents.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.label}
-                </option>
-              ))}
-            </select>
-          </span>
+              <Link2 className="h-3 w-3 shrink-0" />
+              <span className="min-w-0 truncate">
+                {incidentLink ? openIncidents.find((i) => i.id === incidentLink)?.label : 'שיוך לתקלה'}
+              </span>
+              <ChevronDown
+                className={`h-3 w-3 shrink-0 transition-transform ${incidentLinkMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {incidentLinkMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIncidentLinkMenuOpen(false)} />
+                <div className="absolute bottom-full start-0 z-50 mb-2 w-64 overflow-hidden rounded-xl border border-noc-border bg-noc-panel2 shadow-2xl">
+                  <p className="border-b border-noc-border bg-noc-panel3/50 px-3 py-1.5 text-[10px] font-bold text-noc-t3">
+                    שיוך העדכון לתקלה פתוחה
+                  </p>
+                  <div className="max-h-60 overflow-y-auto scrollbar-thin">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIncidentLink('')
+                        setIncidentLinkMenuOpen(false)
+                      }}
+                      className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-sm transition-colors hover:bg-noc-panel3 ${
+                        !incidentLink ? 'font-bold text-noc-accent' : 'font-medium text-noc-t2'
+                      }`}
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-noc-t4/50 text-noc-t4">
+                        <X className="h-3 w-3" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">ללא שיוך לתקלה</span>
+                      {!incidentLink && <Check className="h-4 w-4 shrink-0 text-noc-accent" />}
+                    </button>
+                    {openIncidents.map((i) => {
+                      const selected = i.id === incidentLink
+                      return (
+                        <button
+                          key={i.id}
+                          type="button"
+                          onClick={() => {
+                            setIncidentLink(i.id)
+                            setIncidentLinkMenuOpen(false)
+                          }}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-start transition-colors hover:bg-noc-panel3 ${
+                            selected ? 'bg-noc-accent/10' : ''
+                          }`}
+                        >
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-400 ring-1 ring-red-500/30">
+                            <AlertTriangle className="h-3 w-3" />
+                          </span>
+                          <span
+                            className={`min-w-0 flex-1 truncate text-sm ${
+                              selected ? 'font-bold text-noc-accent' : 'font-medium text-noc-t1'
+                            }`}
+                          >
+                            {i.label}
+                          </span>
+                          {selected && <Check className="h-4 w-4 shrink-0 text-noc-accent" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Send to another date/shift */}
-        <button
-          type="button"
-          onClick={() => setScheduleOpen((v) => !v)}
-          title="שליחה לתאריך/משמרת אחרים"
-          className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
-            scheduleOpen
-              ? 'bg-violet-500/15 text-violet-500 ring-violet-500/40 dark:text-violet-300'
-              : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
-          }`}
-        >
-          <Clock className="h-3 w-3" />
-          למועד אחר
-        </button>
-        {scheduleOpen && (
-          <span className="flex items-center gap-1.5 rounded-full bg-violet-500/10 px-2 py-1 ring-1 ring-violet-500/30">
-            <input
-              type="date"
-              value={schedDate}
-              onChange={(e) => setSchedDate(e.target.value)}
-              className="bg-transparent text-[11px] text-noc-t2 outline-none"
-            />
-            <select
-              value={schedShift}
-              onChange={(e) => setSchedShift(e.target.value as ShiftId)}
-              className="bg-transparent text-[11px] font-bold text-noc-t2 outline-none"
-            >
-              {SHIFT_DEFINITIONS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </span>
-        )}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setScheduleOpen((v) => !v)}
+            title="שליחה לתאריך/משמרת אחרים"
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition-all ${
+              scheduleOpen
+                ? 'bg-violet-500/15 text-violet-500 ring-violet-500/40 dark:text-violet-300'
+                : 'bg-transparent text-noc-t4 ring-noc-border hover:text-noc-t2'
+            }`}
+          >
+            <Clock className="h-3 w-3" />
+            למועד אחר
+          </button>
+          {scheduleOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => {
+                  setScheduleOpen(false)
+                  setSchedShiftMenuOpen(false)
+                }}
+              />
+              <div className="absolute bottom-full start-0 z-50 mb-2 w-60 space-y-2 rounded-xl border border-violet-500/40 bg-noc-panel2 p-2.5 shadow-2xl">
+                <input
+                  type="date"
+                  value={schedDate}
+                  onChange={(e) => setSchedDate(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-noc-border bg-noc-bg/40 px-2.5 text-xs text-noc-t1 outline-none focus:border-violet-500/60"
+                />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSchedShiftMenuOpen((v) => !v)}
+                    className="flex h-9 w-full items-center justify-between rounded-lg border border-noc-border bg-noc-bg/40 px-2.5 text-xs font-semibold text-noc-t1 transition-colors hover:border-violet-500/50"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>{SHIFT_DEFINITIONS.find((d) => d.id === schedShift)?.emoji}</span>
+                      {SHIFT_DEFINITIONS.find((d) => d.id === schedShift)?.label}
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 text-noc-t4 transition-transform ${schedShiftMenuOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {schedShiftMenuOpen && (
+                    <div className="absolute top-full start-0 z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-noc-border bg-noc-panel3 shadow-2xl">
+                      {SHIFT_DEFINITIONS.map((d) => {
+                        const selected = d.id === schedShift
+                        return (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => {
+                              setSchedShift(d.id)
+                              setSchedShiftMenuOpen(false)
+                            }}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-start text-xs transition-colors hover:bg-noc-panel2 ${
+                              selected ? 'font-bold text-noc-accent' : 'font-medium text-noc-t2'
+                            }`}
+                          >
+                            <span>{d.emoji}</span>
+                            <span className="min-w-0 flex-1 truncate">{d.label}</span>
+                            {selected && <Check className="h-3.5 w-3.5 shrink-0 text-noc-accent" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {attachments.map((a) => (
           <span

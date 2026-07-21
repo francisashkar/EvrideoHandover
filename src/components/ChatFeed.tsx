@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { MessageSquareText, SearchX, Pin, CircleAlert, Check, Timer } from 'lucide-react'
-import type { CarryOverItem, ChatMessage } from '../types'
+import type { CarryOverItem, ChatMessage, TagDef } from '../types'
 import { SHIFT_DEFINITIONS } from '../types'
 import MessageBubble from './MessageBubble'
 import { formatDateShort, formatTime } from '../dateUtils'
@@ -22,6 +22,7 @@ interface ChatFeedProps {
   mergeableIds: Set<string>
   highlightTerm: string
   currentOperator: string
+  tags: TagDef[]
   onDeleteMessage: (id: string) => void
   onTogglePin: (id: string) => void
   onToggleUnresolved: (id: string) => void
@@ -40,6 +41,7 @@ export default function ChatFeed({
   mergeableIds,
   highlightTerm,
   currentOperator,
+  tags,
   onDeleteMessage,
   onTogglePin,
   onToggleUnresolved,
@@ -157,6 +159,7 @@ export default function ChatFeed({
           onCopy={() => onCopyMessage(message.id)}
           onEdit={(newText) => onEditMessage(message.id, newText)}
           currentOperator={currentOperator}
+          tags={tags}
           onToggleAck={() => onToggleAck(message.id)}
           onOpenThread={onOpenThread}
         />

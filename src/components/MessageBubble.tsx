@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Trash2, Check, X, Pin, CircleAlert, FileText, Download, Merge, Copy, Pencil, Eye, ListTree, Clock, Link2 } from 'lucide-react'
 import type { ChatMessage, MessageAttachment } from '../types'
-import { TAG_META, attachmentSrc, colorForOperator } from '../types'
+import { attachmentSrc, colorForOperator, tagMetaOf } from '../types'
+import type { TagDef } from '../types'
 import { formatTime } from '../dateUtils'
 import HighlightText from './HighlightText'
 
@@ -22,6 +23,7 @@ interface MessageBubbleProps {
   canMerge: boolean
   highlightTerm: string
   currentOperator: string
+  tags: TagDef[]
   onDelete: () => void
   onTogglePin: () => void
   onToggleUnresolved: () => void
@@ -37,6 +39,7 @@ export default function MessageBubble({
   highlightTerm,
   canMerge,
   currentOperator,
+  tags,
   onDelete,
   onTogglePin,
   onToggleUnresolved,
@@ -53,7 +56,7 @@ export default function MessageBubble({
   const editRef = useRef<HTMLTextAreaElement>(null)
   const rtl = isRtlText(message.text) || message.text === ''
   const badgeColor = colorForOperator(message.operator)
-  const tagMeta = message.tag && message.tag !== 'update' ? TAG_META[message.tag] : null
+  const tagMeta = message.tag && message.tag !== 'update' ? tagMetaOf(tags, message.tag) : null
   // Unresolved marking is reserved for incident-tagged messages
   // (still shown when already unresolved so it can be cleared)
   const canToggleUnresolved = message.tag === 'incident' || !!message.unresolved

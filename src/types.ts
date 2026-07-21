@@ -42,39 +42,68 @@ export const SHIFT_DEFINITIONS: ShiftDefinition[] = [
 
 export const SHIFT_ORDER: ShiftId[] = ['shift1', 'shift2', 'shift3']
 
-export type MessageTag = 'update' | 'incident' | 'followup' | 'maintenance' | 'provider' | 'hardware'
+// Tags are user-editable (see useTags), but 'update' and 'incident' are the two
+// built-in ids the app's logic depends on (default tag, and incident detection)
+// and can be relabeled/recolored but never deleted.
+export type MessageTag = string
+export const BUILTIN_UPDATE_TAG = 'update'
+export const BUILTIN_INCIDENT_TAG = 'incident'
 
-export const TAG_META: Record<MessageTag, { label: string; chip: string; ticketPrefix: string }> = {
-  update: {
-    label: 'עדכון',
-    chip: 'bg-sky-500/15 text-sky-400 ring-sky-500/30',
-    ticketPrefix: '',
-  },
-  incident: {
+export interface TagDef {
+  id: string
+  label: string
+  chip: string
+  ticketPrefix: string
+  /** 'update' and 'incident' can't be deleted — the app's logic relies on their ids */
+  builtin?: boolean
+}
+
+export const DEFAULT_TAGS: TagDef[] = [
+  { id: 'update', label: 'עדכון', chip: 'bg-sky-500/15 text-sky-400 ring-sky-500/30', ticketPrefix: '', builtin: true },
+  {
+    id: 'incident',
     label: 'תקלה',
     chip: 'bg-red-500/15 text-red-400 ring-red-500/30',
     ticketPrefix: '[תקלה] ',
+    builtin: true,
   },
-  followup: {
+  {
+    id: 'followup',
     label: 'מעקב',
     chip: 'bg-amber-500/15 text-amber-500 ring-amber-500/30',
     ticketPrefix: '[מעקב] ',
   },
-  maintenance: {
+  {
+    id: 'maintenance',
     label: 'תחזוקה',
     chip: 'bg-violet-500/15 text-violet-500 ring-violet-500/30 dark:text-violet-400',
     ticketPrefix: '[תחזוקה] ',
   },
-  provider: {
+  {
+    id: 'provider',
     label: 'ספק',
     chip: 'bg-orange-500/15 text-orange-500 ring-orange-500/30 dark:text-orange-400',
     ticketPrefix: '[ספק] ',
   },
-  hardware: {
+  {
+    id: 'hardware',
     label: 'חומרה',
     chip: 'bg-rose-500/15 text-rose-500 ring-rose-500/30 dark:text-rose-400',
     ticketPrefix: '[חומרה] ',
   },
+]
+
+const FALLBACK_TAG: TagDef = {
+  id: 'update',
+  label: 'עדכון',
+  chip: 'bg-sky-500/15 text-sky-400 ring-sky-500/30',
+  ticketPrefix: '',
+  builtin: true,
+}
+
+/** Look up a tag's display info from the live tag list (falls back to a plain "update" look). */
+export function tagMetaOf(tags: TagDef[], tagId: string | undefined): TagDef {
+  return tags.find((t) => t.id === (tagId ?? BUILTIN_UPDATE_TAG)) ?? FALLBACK_TAG
 }
 
 export interface MessageAttachment {
@@ -135,6 +164,52 @@ export interface CarryOverItem {
   dateKey: string
   shiftId: ShiftId
   message: ChatMessage
+}
+
+export type IncidentUrgency = 'critical' | 'high' | 'medium' | 'low'
+
+export const URGENCY_META: Record<IncidentUrgency, { label: string; chip: string; dot: string; order: number }> = {
+  critical: { label: 'קריטי', chip: 'bg-red-500/15 text-red-500 ring-red-500/40 dark:text-red-400', dot: 'bg-red-500', order: 0 },
+  high: { label: 'גבוה', chip: 'bg-orange-500/15 text-orange-500 ring-orange-500/40 dark:text-orange-400', dot: 'bg-orange-500', order: 1 },
+  medium: { label: 'בינוני', chip: 'bg-amber-500/15 text-amber-500 ring-amber-500/40 dark:text-amber-400', dot: 'bg-amber-400', order: 2 },
+  low: { label: 'נמוך', chip: 'bg-sky-500/15 text-sky-500 ring-sky-500/40 dark:text-sky-400', dot: 'bg-sky-400', order: 3 },
+}
+
+export type ResolutionKind = 'note' | 'skipped' | 'self-resolved'
+
+export interface IncidentResolution {
+  kind: ResolutionKind
+  note?: string
+  resolvedBy: string
+  resolvedAt: number
+}
+
+export interface IncidentTimelineEntry {
+  id: string
+  text: string
+  operator: string
+  at: number
+  /** Id of the chat message this entry was created from, if any (a linked follow-up) — lets it be removed if that message is later deleted */
+  sourceMessageId?: string
+}
+
+export type IncidentSource =
+  | { kind: 'chat'; dateKey: string; shiftId: ShiftId; messageId: string }
+  | { kind: 'manual' }
+
+/** A tracked incident in the incident board — separate from chat messages. */
+export interface IncidentItem {
+  id: string
+  title: string
+  description?: string
+  urgency: IncidentUrgency
+  open: boolean
+  source: IncidentSource
+  timeline: IncidentTimelineEntry[]
+  attachments: MessageAttachment[]
+  resolution?: IncidentResolution
+  createdBy: string
+  createdAt: number
 }
 
 export const OPERATOR_COLORS = [
