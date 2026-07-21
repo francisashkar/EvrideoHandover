@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-07-21T17:28:06.641Z",
-  "projectRoot": "c:\\Users\\Ashka\\Downloads\\EvrideoHandover",
+  "timestamp": "2026-07-21T17:45:00.273Z",
+  "projectRoot": "C:\\Users\\Ashka\\Downloads\\EvrideoHandover",
   "structure": {
     "hasPackageJson": true,
     "hasTsConfig": true,
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1784654886642
+  "scannedAt": 1784655900273
 }

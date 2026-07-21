@@ -1,4 +1,4 @@
-import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen, AlertTriangle } from 'lucide-react'
+import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen, AlertTriangle, HelpCircle } from 'lucide-react'
 import { firebaseEnabled } from '../firebase'
 import { formatDateLong, shiftDateKey } from '../dateUtils'
 
@@ -18,6 +18,7 @@ interface HeaderProps {
   onOpenRunbook: () => void
   onOpenIncidents: () => void
   openIncidentCount: number
+  onOpenHelp: () => void
 }
 
 export default function Header({
@@ -36,6 +37,7 @@ export default function Header({
   onOpenRunbook,
   onOpenIncidents,
   openIncidentCount,
+  onOpenHelp,
 }: HeaderProps) {
   const timeLabel = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
@@ -108,6 +110,14 @@ export default function Header({
             className="flex h-10 w-10 items-center justify-center rounded-full border border-noc-border bg-noc-panel2 text-noc-t2 transition-colors hover:border-noc-borderLight hover:text-noc-accent"
           >
             <BookOpen className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={onOpenHelp}
+            title="איך משתמשים באפליקציה"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-noc-border bg-noc-panel2 text-noc-t2 transition-colors hover:border-noc-accent/50 hover:text-noc-accent"
+          >
+            <HelpCircle className="h-4 w-4" />
           </button>
 
           <button

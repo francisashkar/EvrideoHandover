@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ticket, CloudOff, ArrowLeftRight, X, Hand } from 'lucide-react'
+import { Ticket, CloudOff, ArrowLeftRight, X } from 'lucide-react'
 import Header from './components/Header'
 import ShiftTabs from './components/ShiftTabs'
 import ShiftStatsBar from './components/ShiftStatsBar'
@@ -19,10 +19,10 @@ import IncidentThreadModal from './components/IncidentThreadModal'
 import IncidentBoard from './components/IncidentBoard'
 import IncidentArchive from './components/IncidentArchive'
 import ResolutionModal from './components/ResolutionModal'
+import HelpModal from './components/HelpModal'
 import { useAuth } from './hooks/useAuth'
 import { useContacts } from './hooks/useContacts'
 import { useRunbook } from './hooks/useRunbook'
-import { useHandover } from './hooks/useHandover'
 import { useTags } from './hooks/useTags'
 import { useIncidents } from './hooks/useIncidents'
 import { useChatStore } from './hooks/useChatStore'
@@ -33,7 +33,7 @@ import { firebaseEnabled } from './firebase'
 import { SHIFT_DEFINITIONS, STATUS_META, colorForOperator } from './types'
 import type { CarryOverItem, IncidentItem, IncidentResolution, MessageAttachment, MessageTag, ShiftId, ShiftStatus } from './types'
 import type { SendExtras } from './components/ChatInputBar'
-import { getActiveShiftId, shiftDateKey, formatTime, formatDateShort } from './dateUtils'
+import { getActiveShiftId, shiftDateKey, formatDateShort } from './dateUtils'
 import { copyToClipboard, copyRichText } from './clipboard'
 import { generateTicketUpdate, generateTicketUpdateHtml } from './ticketGenerator'
 
@@ -60,6 +60,7 @@ function App() {
   const [contactsOpen, setContactsOpen] = useState(false)
   const [runbookOpen, setRunbookOpen] = useState(false)
   const [threadId, setThreadId] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [incidentBoardOpen, setIncidentBoardOpen] = useState(false)
   const [incidentArchiveOpen, setIncidentArchiveOpen] = useState(false)
   const [resolvingIncident, setResolvingIncident] = useState<IncidentItem | null>(null)
@@ -84,7 +85,6 @@ function App() {
   const { state: authState, signIn, signOut } = useAuth()
   const contactsApi = useContacts()
   const runbookApi = useRunbook()
-  const { getAck, acceptShift } = useHandover()
   const tagsApi = useTags()
   const { tags } = tagsApi
   const incidentsApi = useIncidents()
@@ -157,7 +157,6 @@ function App() {
   const activeShiftDef = SHIFT_DEFINITIONS.find((s) => s.id === activeTab)!
   const activeMessages = dayMessages[activeTab]
   const carryOver = getCarryOver(dateKey, activeTab)
-  const handoverAck = getAck(dateKey, activeTab)
 
   // Open incidents, offered in the chat composer so a follow-up message can be
   // linked to one. The id used here is the original incident-tagged message's
@@ -243,6 +242,7 @@ function App() {
       // Incidents open as unresolved — this flips the shift status to תקלה
       // until someone marks them as resolved
       unresolved: tag === 'incident' ? true : undefined,
+      urgency: tag === 'incident' ? extras.urgency ?? 'medium' : undefined,
       incidentId: extras.incidentId,
       scheduled: sentElsewhere || undefined,
       attachments: attachments.length > 0 ? attachments : undefined,
@@ -353,6 +353,7 @@ function App() {
         onOpenRunbook={() => setRunbookOpen(true)}
         onOpenIncidents={() => setIncidentBoardOpen(true)}
         openIncidentCount={incidentsApi.incidents.filter((i) => i.open).length}
+        onOpenHelp={() => setHelpOpen(true)}
       />
 
       {!firebaseEnabled && (
@@ -403,25 +404,6 @@ function App() {
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 </span>
                 חזרה למשמרת הפעילה
-              </button>
-            )}
-
-            {handoverAck ? (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-600 ring-1 ring-emerald-500/30 dark:text-emerald-400">
-                <Hand className="h-3 w-3" />
-                התקבלה ע"י {handoverAck.operator} · {formatTime(handoverAck.at)}
-              </span>
-            ) : (
-              <button
-                onClick={() => {
-                  acceptShift(dateKey, activeTab, selectedOperator)
-                  showToast('המשמרת התקבלה ✋')
-                }}
-                title="אישור קבלת המשמרת — נרשם עם שם ושעה"
-                className="flex items-center gap-1 rounded-full border border-noc-accent/50 bg-noc-accent/10 px-2.5 py-1 text-[11px] font-bold text-noc-accent transition-colors hover:bg-noc-accent/20"
-              >
-                <Hand className="h-3 w-3" />
-                קבלת משמרת
               </button>
             )}
           </div>
@@ -728,6 +710,7 @@ function App() {
         onClose={() => setResolvingIncident(null)}
         onResolve={handleConfirmResolution}
       />
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <Toast toast={toast} />
     </div>

@@ -64,13 +64,16 @@ function docToIncident(id: string, data: DocumentData): IncidentItem {
 }
 
 function makeTimelineEntry(text: string, operator: string, sourceMessageId?: string): IncidentTimelineEntry {
-  return {
+  const entry: IncidentTimelineEntry = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     text,
     operator,
     at: Date.now(),
-    sourceMessageId,
   }
+  // Firestore rejects `undefined` field values, including inside array
+  // elements — omit the key entirely rather than setting it to undefined
+  if (sourceMessageId !== undefined) entry.sourceMessageId = sourceMessageId
+  return entry
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +160,11 @@ function useFirestoreIncidents(): IncidentsApi {
 
   const resolveIncident = useCallback((id: string, resolution: IncidentResolution) => {
     if (!db) return
-    updateDoc(doc(db, INCIDENTS_COLLECTION, id), { open: false, resolution }).catch(() => {})
+    // Firestore rejects `undefined` field values (unlike the local backend,
+    // where they're simply dropped) — omit `note` entirely when there is none
+    const { note, ...rest } = resolution
+    const cleanResolution: DocumentData = note !== undefined ? { ...rest, note } : rest
+    updateDoc(doc(db, INCIDENTS_COLLECTION, id), { open: false, resolution: cleanResolution }).catch(() => {})
   }, [])
 
   const reopenIncident = useCallback((id: string) => {

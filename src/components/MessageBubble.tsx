@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Trash2, Check, X, Pin, CircleAlert, CheckCircle2, FileText, Download, Merge, Copy, Pencil, Eye, ListTree, Clock, Link2 } from 'lucide-react'
 import type { ChatMessage, MessageAttachment } from '../types'
-import { attachmentSrc, colorForOperator, tagMetaOf } from '../types'
+import { attachmentSrc, colorForOperator, tagMetaOf, URGENCY_META } from '../types'
 import type { TagDef } from '../types'
 import { formatTime } from '../dateUtils'
 import HighlightText from './HighlightText'
@@ -126,6 +126,14 @@ export default function MessageBubble({
           {tagMeta && (
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${tagMeta.chip}`}>
               {tagMeta.label}
+            </span>
+          )}
+          {message.tag === 'incident' && message.urgency && (
+            <span
+              className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${URGENCY_META[message.urgency].chip}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${URGENCY_META[message.urgency].dot}`} />
+              {URGENCY_META[message.urgency].label}
             </span>
           )}
           {message.pinned && <Pin className="h-3 w-3 fill-current text-noc-accent" />}
