@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Trash2, Check, X, Pin, CircleAlert, CheckCircle2, FileText, Download, Merge, Copy, Pencil, Eye, ListTree, Clock, Link2 } from 'lucide-react'
 import type { ChatMessage, MessageAttachment } from '../types'
-<<<<<<< HEAD
 import { attachmentSrc, colorForOperator, tagMetaOf, URGENCY_META } from '../types'
-=======
-import { attachmentSrc, colorForOperator, tagMetaOf } from '../types'
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
 import type { TagDef } from '../types'
 import { formatTime } from '../dateUtils'
 import HighlightText from './HighlightText'

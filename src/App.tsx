@@ -19,17 +19,10 @@ import IncidentThreadModal from './components/IncidentThreadModal'
 import IncidentBoard from './components/IncidentBoard'
 import IncidentArchive from './components/IncidentArchive'
 import ResolutionModal from './components/ResolutionModal'
-<<<<<<< HEAD
 import HelpModal from './components/HelpModal'
 import { useAuth } from './hooks/useAuth'
 import { useContacts } from './hooks/useContacts'
 import { useRunbook } from './hooks/useRunbook'
-=======
-import { useAuth } from './hooks/useAuth'
-import { useContacts } from './hooks/useContacts'
-import { useRunbook } from './hooks/useRunbook'
-import { useHandover } from './hooks/useHandover'
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
 import { useTags } from './hooks/useTags'
 import { useIncidents } from './hooks/useIncidents'
 import { useChatStore } from './hooks/useChatStore'
@@ -67,10 +60,7 @@ function App() {
   const [contactsOpen, setContactsOpen] = useState(false)
   const [runbookOpen, setRunbookOpen] = useState(false)
   const [threadId, setThreadId] = useState<string | null>(null)
-<<<<<<< HEAD
   const [helpOpen, setHelpOpen] = useState(false)
-=======
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
   const [incidentBoardOpen, setIncidentBoardOpen] = useState(false)
   const [incidentArchiveOpen, setIncidentArchiveOpen] = useState(false)
   const [resolvingIncident, setResolvingIncident] = useState<IncidentItem | null>(null)
@@ -95,10 +85,6 @@ function App() {
   const { state: authState, signIn, signOut } = useAuth()
   const contactsApi = useContacts()
   const runbookApi = useRunbook()
-<<<<<<< HEAD
-=======
-  const { getAck, acceptShift } = useHandover()
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
   const tagsApi = useTags()
   const { tags } = tagsApi
   const incidentsApi = useIncidents()
@@ -299,7 +285,6 @@ function App() {
   }
 
   const handleResolveCarryOver = (item: CarryOverItem) => {
-<<<<<<< HEAD
     // Same resolution popup as closing from the chat bubble or the incident
     // board — never resolve silently, always ask how it was resolved
     const incident = incidentsApi.findBySource(item.dateKey, item.shiftId, item.message.id)
@@ -309,38 +294,6 @@ function App() {
       updateMessage(item.dateKey, item.shiftId, item.message.id, { unresolved: false })
       showToast('סומן כטופל')
     }
-  }
-
-  const handleConfirmResolution = (resolution: IncidentResolution) => {
-    if (!resolvingIncident) return
-    incidentsApi.resolveIncident(resolvingIncident.id, resolution)
-    if (resolvingIncident.source.kind === 'chat') {
-      const { dateKey: dk, shiftId: sid, messageId } = resolvingIncident.source
-      updateMessage(dk, sid, messageId, { unresolved: false })
-    }
-    setResolvingIncident(null)
-    showToast('התקלה נסגרה')
-  }
-
-  const handleJumpToChat = (dk: string, shiftId: ShiftId, messageId: string) => {
-    setDateKey(dk)
-    setActiveTab(shiftId)
-    setIncidentBoardOpen(false)
-    setIncidentArchiveOpen(false)
-    showToast('עברתם להודעה בצ׳אט')
-    void messageId
-=======
-    updateMessage(item.dateKey, item.shiftId, item.message.id, { unresolved: false })
-    const incident = incidentsApi.findBySource(item.dateKey, item.shiftId, item.message.id)
-    if (incident) {
-      incidentsApi.resolveIncident(incident.id, {
-        kind: 'skipped',
-        resolvedBy: selectedOperator,
-        resolvedAt: Date.now(),
-      })
-    }
-    showToast('סומן כטופל')
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
   }
 
   const handleConfirmResolution = (resolution: IncidentResolution) => {
@@ -400,10 +353,7 @@ function App() {
         onOpenRunbook={() => setRunbookOpen(true)}
         onOpenIncidents={() => setIncidentBoardOpen(true)}
         openIncidentCount={incidentsApi.incidents.filter((i) => i.open).length}
-<<<<<<< HEAD
         onOpenHelp={() => setHelpOpen(true)}
-=======
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
       />
 
       {!firebaseEnabled && (
@@ -760,10 +710,7 @@ function App() {
         onClose={() => setResolvingIncident(null)}
         onResolve={handleConfirmResolution}
       />
-<<<<<<< HEAD
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-=======
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
 
       <Toast toast={toast} />
     </div>

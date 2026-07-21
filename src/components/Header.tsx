@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen, AlertTriangle, HelpCircle } from 'lucide-react'
-=======
-import { RadioTower, CalendarDays, Clock, LayoutGrid, Sun, Moon, ListTodo, LogOut, Undo2, BookUser, BookOpen, AlertTriangle } from 'lucide-react'
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
 import { firebaseEnabled } from '../firebase'
 import { formatDateLong, shiftDateKey } from '../dateUtils'
 
@@ -22,10 +18,7 @@ interface HeaderProps {
   onOpenRunbook: () => void
   onOpenIncidents: () => void
   openIncidentCount: number
-<<<<<<< HEAD
   onOpenHelp: () => void
-=======
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
 }
 
 export default function Header({
@@ -44,10 +37,7 @@ export default function Header({
   onOpenRunbook,
   onOpenIncidents,
   openIncidentCount,
-<<<<<<< HEAD
   onOpenHelp,
-=======
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
 }: HeaderProps) {
   const timeLabel = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
