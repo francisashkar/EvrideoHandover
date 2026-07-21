@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
-  "timestamp": "2026-07-21T17:52:00.302Z",
-=======
-  "timestamp": "2026-07-21T00:37:51.367Z",
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
+  "timestamp": "2026-07-21T18:07:07.106Z",
   "mode": "local",
   "checks": {
     "envFilesProtected": true,

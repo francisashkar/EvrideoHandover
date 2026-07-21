@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
-  "timestamp": "2026-07-21T17:46:06.649Z",
-=======
-  "timestamp": "2026-07-21T00:33:51.249Z",
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
+  "timestamp": "2026-07-21T18:06:06.667Z",
   "mode": "local",
   "hasTestDir": false,
   "estimatedCoverage": "unknown",

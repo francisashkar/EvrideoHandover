@@ -1,20 +1,11 @@
 {
-<<<<<<< HEAD
-  "timestamp": "2026-07-21T17:45:00.273Z",
+  "timestamp": "2026-07-21T18:00:00.293Z",
   "projectRoot": "C:\\Users\\Ashka\\Downloads\\EvrideoHandover",
-=======
-  "timestamp": "2026-07-21T00:40:51.284Z",
-  "projectRoot": "c:\\Users\\Ashka\\Downloads\\EvrideoHandover",
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
   "structure": {
     "hasPackageJson": true,
     "hasTsConfig": true,
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-<<<<<<< HEAD
-  "scannedAt": 1784655900273
-=======
-  "scannedAt": 1784594451285
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
+  "scannedAt": 1784656800293
 }

@@ -1,27 +1,14 @@
 {
-<<<<<<< HEAD
-  "timestamp": "2026-07-21T17:49:00.273Z",
+  "timestamp": "2026-07-21T18:04:00.286Z",
   "mode": "local",
   "memoryUsage": {
-    "rss": 79020032,
+    "rss": 78520320,
     "heapTotal": 21643264,
-    "heapUsed": 20581304,
+    "heapUsed": 20344432,
     "external": 4550390,
     "arrayBuffers": 474447
   },
-  "uptime": 1140.4253119,
-=======
-  "timestamp": "2026-07-21T00:29:51.258Z",
-  "mode": "local",
-  "memoryUsage": {
-    "rss": 74063872,
-    "heapTotal": 21368832,
-    "heapUsed": 20295424,
-    "external": 4550390,
-    "arrayBuffers": 474447
-  },
-  "uptime": 7440.4812254,
->>>>>>> a84c55589a1d802e00c1823e4b6f43775ce26d30
+  "uptime": 2040.4382423,
   "optimizations": {
     "cacheHitRate": 0.78,
     "avgResponseTime": 45
