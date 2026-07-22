@@ -265,9 +265,11 @@ function App() {
     // openIncidents) — resolve it to the actual board item via its chat source.
     // The new message's own id is stored on the entry (sourceMessageId) so the
     // entry can be removed later if this follow-up message gets deleted.
-    if (extras.incidentId && text.trim() && messageId) {
+    if (extras.incidentId && (text.trim() || attachments.length > 0) && messageId) {
       const linkedIncident = incidentsApi.findBySource(dateKey, activeTab, extras.incidentId)
-      if (linkedIncident) incidentsApi.addTimelineEntry(linkedIncident.id, text.trim(), selectedOperator, messageId)
+      if (linkedIncident) {
+        incidentsApi.addTimelineEntry(linkedIncident.id, text.trim(), selectedOperator, messageId, attachments)
+      }
     }
     if (sentElsewhere) {
       const shiftLabel = SHIFT_DEFINITIONS.find((d) => d.id === targetShift)!.label
@@ -379,7 +381,14 @@ function App() {
       />
 
       <div className="flex w-full flex-1 overflow-hidden">
-        <TaskRail tasks={tasks} shiftId={activeTab} dateKey={dateKey} onToggle={(id) => toggleTask(id, dateKey)} />
+        <TaskRail
+          tasks={tasks}
+          operators={operators}
+          shiftId={activeTab}
+          dateKey={dateKey}
+          onToggle={(id) => toggleTask(id, dateKey)}
+          onUpdate={updateTask}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6">
@@ -598,7 +607,13 @@ function App() {
               if (ok) showToast('ההודעה הועתקה!')
             }}
             onEditMessage={(id, newText) => {
+              const m = activeMessages.find((x) => x.id === id)
               updateMessage(dateKey, activeTab, id, { text: newText, edited: true })
+              // Keep the incident board's title in sync with its origin message
+              if (m?.tag === 'incident') {
+                const incident = incidentsApi.findBySource(dateKey, activeTab, id)
+                if (incident) incidentsApi.updateIncident(incident.id, { title: newText.trim() || 'תקלה ללא תיאור' })
+              }
               showToast('ההודעה עודכנה')
             }}
             onToggleAck={handleToggleAck}

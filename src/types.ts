@@ -193,6 +193,7 @@ export interface IncidentTimelineEntry {
   at: number
   /** Id of the chat message this entry was created from, if any (a linked follow-up) — lets it be removed if that message is later deleted */
   sourceMessageId?: string
+  attachments?: MessageAttachment[]
 }
 
 export type IncidentSource =

@@ -486,10 +486,45 @@ export default function IncidentBoard({
                                 incident.timeline.map((entry) => (
                                   <div key={entry.id} className="flex gap-2 text-xs">
                                     <span className="shrink-0 text-noc-t4">{formatTime(entry.at)}</span>
-                                    <span className="min-w-0 flex-1 text-noc-t2">
-                                      <span className="font-semibold text-noc-t1">{entry.operator}:</span>{' '}
-                                      {entry.text}
-                                    </span>
+                                    <div className="min-w-0 flex-1 text-noc-t2">
+                                      <span>
+                                        <span className="font-semibold text-noc-t1">{entry.operator}:</span>{' '}
+                                        {entry.text}
+                                      </span>
+                                      {entry.attachments && entry.attachments.length > 0 && (
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                          {entry.attachments.map((a) =>
+                                            a.mimeType.startsWith('image/') ? (
+                                              <button
+                                                key={a.id}
+                                                type="button"
+                                                onClick={() => setLightbox(a)}
+                                                title={`${a.name} (${sizeLabel(a.size)}) — לחצו להגדלה`}
+                                                className="block cursor-zoom-in overflow-hidden rounded-lg border border-noc-border transition-opacity hover:opacity-90"
+                                              >
+                                                <img
+                                                  src={attachmentSrc(a)}
+                                                  alt={a.name}
+                                                  className="h-16 max-w-28 object-cover"
+                                                />
+                                              </button>
+                                            ) : (
+                                              <a
+                                                key={a.id}
+                                                href={attachmentSrc(a)}
+                                                download={a.name}
+                                                target={a.url ? '_blank' : undefined}
+                                                rel={a.url ? 'noreferrer' : undefined}
+                                                className="flex items-center gap-1 rounded-lg border border-noc-border bg-noc-panel2 px-2 py-1 text-[10px] text-noc-t2"
+                                              >
+                                                <FileText className="h-3 w-3 text-noc-accent2" />
+                                                <span className="max-w-20 truncate">{a.name}</span>
+                                              </a>
+                                            ),
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 ))
                               )}

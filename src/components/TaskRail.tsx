@@ -1,19 +1,44 @@
 import { useRef, useState } from 'react'
-import { CalendarDays, Check, ListTodo, User, Users, Infinity as InfinityIcon, Repeat } from 'lucide-react'
-import type { Task } from '../hooks/useTasks'
+import {
+  CalendarDays,
+  Check,
+  ListTodo,
+  User,
+  Users,
+  Infinity as InfinityIcon,
+  Repeat,
+  Pencil,
+  X,
+  AlignCenter,
+} from 'lucide-react'
+import type { Task, TaskAssignee, TaskPatch } from '../hooks/useTasks'
 import { isTaskDone } from '../hooks/useTasks'
 import type { ShiftId } from '../types'
-import { SHIFT_SHORT_LABELS } from './TaskPanel'
+import { SHIFT_SHORT_LABELS, type TaskMode } from './TaskPanel'
 import { formatDateShort } from '../dateUtils'
 
 interface TaskRailProps {
   tasks: Task[]
+  operators: string[]
   shiftId: ShiftId
   dateKey: string
   onToggle: (id: string) => void
+  onUpdate: (id: string, patch: TaskPatch) => void
 }
 
 const ROTATIONS = ['-rotate-1', 'rotate-1', '-rotate-2', 'rotate-2']
+const STRAIGHT_KEY = 'noc-tasks-straight'
+
+function assigneeToValue(assignee?: TaskAssignee): string {
+  if (!assignee) return ''
+  return assignee.kind === 'operator' ? `op:${assignee.name}` : `shift:${assignee.shiftId}`
+}
+
+function parseAssignee(value: string): TaskAssignee | undefined {
+  if (value.startsWith('op:')) return { kind: 'operator', name: value.slice(3) }
+  if (value.startsWith('shift:')) return { kind: 'shift', shiftId: value.slice(6) as ShiftId }
+  return undefined
+}
 
 /** Sticky-note color families — each task gets a deterministic pick based on its id, so the color stays stable across renders. */
 const NOTE_COLORS = [
@@ -40,9 +65,29 @@ function colorForTask(id: string): (typeof NOTE_COLORS)[number] {
  * - date: dated tasks appear only on their scheduled date
  *   (undated tasks appear every day)
  */
-export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRailProps) {
+export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle, onUpdate }: TaskRailProps) {
   const [leavingIds, setLeavingIds] = useState<Set<string>>(new Set())
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [straight, setStraight] = useState(() => {
+    try {
+      return window.localStorage.getItem(STRAIGHT_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  const toggleStraight = () => {
+    setStraight((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(STRAIGHT_KEY, String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
 
   const handleDone = (id: string) => {
     if (leavingIds.has(id)) return
@@ -77,6 +122,15 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
             {notes.length}
           </span>
         )}
+        <button
+          onClick={toggleStraight}
+          title={straight ? 'החזרת נטיית הפתקיות' : 'יישור הפתקיות'}
+          className={`ms-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+            straight ? 'bg-noc-accent/20 text-noc-accent' : 'text-noc-t4 hover:bg-noc-panel3 hover:text-noc-t2'
+          }`}
+        >
+          <AlignCenter className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-3 scrollbar-thin">
@@ -85,12 +139,30 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
         ) : (
           notes.map((task, i) => {
             const color = colorForTask(task.id)
+            const rotation = straight ? '' : ROTATIONS[i % ROTATIONS.length]
+
+            if (editingId === task.id) {
+              return (
+                <TaskNoteEditor
+                  key={task.id}
+                  task={task}
+                  operators={operators}
+                  color={color}
+                  onCancel={() => setEditingId(null)}
+                  onSave={(patch) => {
+                    onUpdate(task.id, patch)
+                    setEditingId(null)
+                  }}
+                />
+              )
+            }
+
             return (
               <div
                 key={task.id}
-                className={`${ROTATIONS[i % ROTATIONS.length]} rounded-sm ${color.bg} p-2.5 ${color.text} shadow-lg shadow-black/30 transition-transform hover:rotate-0 ${
-                  leavingIds.has(task.id) ? 'note-leaving' : ''
-                }`}
+                className={`group/note relative ${rotation} rounded-sm ${color.bg} p-2.5 ${color.text} shadow-lg shadow-black/30 transition-transform ${
+                  straight ? '' : 'hover:rotate-0'
+                } ${leavingIds.has(task.id) ? 'note-leaving' : ''}`}
               >
                 <div className="mb-1.5 flex items-center justify-between gap-1">
                   <div className="flex flex-wrap items-center gap-1">
@@ -112,13 +184,22 @@ export default function TaskRail({ tasks, shiftId, dateKey, onToggle }: TaskRail
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDone(task.id)}
-                    title="סימון כבוצע"
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors hover:border-emerald-600 hover:bg-emerald-500 hover:text-white ${color.check}`}
-                  >
-                    <Check className="h-3 w-3" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      onClick={() => setEditingId(task.id)}
+                      title="עריכת משימה"
+                      className={`flex h-5 w-5 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-black/10 group-hover/note:opacity-100 dark:hover:bg-white/10 ${color.text}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => handleDone(task.id)}
+                      title="סימון כבוצע"
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors hover:border-emerald-600 hover:bg-emerald-500 hover:text-white ${color.check}`}
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
                 <p className={`whitespace-pre-wrap break-words text-sm font-bold leading-snug ${color.text}`}>
                   {task.text}
@@ -155,4 +236,114 @@ function TaskChip({ task, chip }: { task: Task; chip: string }) {
     )
   }
   return <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${chip}`}>כללי</span>
+}
+
+function TaskNoteEditor({
+  task,
+  operators,
+  color,
+  onSave,
+  onCancel,
+}: {
+  task: Task
+  operators: string[]
+  color: { bg: string; text: string }
+  onSave: (patch: TaskPatch) => void
+  onCancel: () => void
+}) {
+  const [eText, setEText] = useState(task.text)
+  const [eDesc, setEDesc] = useState(task.description ?? '')
+  const [eDate, setEDate] = useState(task.date ?? '')
+  const [eMode, setEMode] = useState<TaskMode>(task.recurring ? 'recurring' : task.date ? 'date' : 'permanent')
+  const [eAssignee, setEAssignee] = useState(assigneeToValue(task.assignee))
+
+  const save = () => {
+    if (!eText.trim()) return
+    onSave({
+      text: eText.trim(),
+      description: eDesc.trim() || undefined,
+      date: eMode === 'date' ? eDate || undefined : undefined,
+      recurring: eMode === 'recurring',
+      assignee: parseAssignee(eAssignee),
+    })
+  }
+
+  return (
+    <div className={`space-y-1.5 rounded-sm ${color.bg} p-2.5 shadow-lg shadow-black/30`}>
+      <input
+        autoFocus
+        type="text"
+        value={eText}
+        onChange={(e) => setEText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+          if (e.key === 'Escape') onCancel()
+        }}
+        className="h-7 w-full rounded-md border border-black/20 bg-white/50 px-2 text-xs font-bold text-slate-900 outline-none focus:border-black/40"
+      />
+      <textarea
+        value={eDesc}
+        onChange={(e) => setEDesc(e.target.value)}
+        placeholder="תיאור..."
+        rows={2}
+        className="w-full rounded-md border border-black/20 bg-white/50 px-2 py-1 text-[11px] leading-relaxed text-slate-800 outline-none focus:border-black/40"
+        style={{ resize: 'none' }}
+      />
+      <div className="flex items-stretch gap-1">
+        <select
+          value={eMode}
+          onChange={(e) => setEMode(e.target.value as TaskMode)}
+          className="h-6 shrink-0 rounded-md border border-black/20 bg-white/50 px-1 text-[9px] font-bold text-slate-800 outline-none"
+        >
+          <option value="date">לתאריך</option>
+          <option value="permanent">קבוע</option>
+          <option value="recurring">חוזר</option>
+        </select>
+        {eMode === 'date' && (
+          <input
+            type="date"
+            value={eDate}
+            onChange={(e) => setEDate(e.target.value)}
+            className="h-6 min-w-0 flex-1 rounded-md border border-black/20 bg-white/50 px-1 text-[10px] text-slate-800 outline-none"
+          />
+        )}
+      </div>
+      <select
+        value={eAssignee}
+        onChange={(e) => setEAssignee(e.target.value)}
+        className="h-6 w-full rounded-md border border-black/20 bg-white/50 px-1 text-[10px] text-slate-800 outline-none"
+      >
+        <option value="">כללי</option>
+        <optgroup label="משמרת שלמה">
+          {(Object.keys(SHIFT_SHORT_LABELS) as ShiftId[]).map((sid) => (
+            <option key={sid} value={`shift:${sid}`}>
+              {SHIFT_SHORT_LABELS[sid]}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="נוקיסט">
+          {operators.map((name) => (
+            <option key={name} value={`op:${name}`}>
+              {name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={save}
+          disabled={!eText.trim()}
+          className="flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white disabled:opacity-40"
+        >
+          <Check className="h-3 w-3" /> שמירה
+        </button>
+        <button
+          onClick={onCancel}
+          className="flex items-center gap-1 rounded-full border border-black/20 px-2.5 py-1 text-[10px] font-bold text-slate-800"
+        >
+          <X className="h-3 w-3" /> ביטול
+        </button>
+      </div>
+    </div>
+  )
 }

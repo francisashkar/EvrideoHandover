@@ -1,8 +1,41 @@
-import { X, ListTree, Copy, CircleAlert, CheckCircle2, Sparkles, SkipForward, PenLine } from 'lucide-react'
-import type { ChatMessage, IncidentItem } from '../types'
-import { colorForOperator } from '../types'
+import { X, ListTree, Copy, CircleAlert, CheckCircle2, Sparkles, SkipForward, PenLine, FileText } from 'lucide-react'
+import type { ChatMessage, IncidentItem, MessageAttachment } from '../types'
+import { colorForOperator, attachmentSrc } from '../types'
 import { formatTime } from '../dateUtils'
 import { copyToClipboard } from '../clipboard'
+
+function AttachmentStrip({ attachments }: { attachments: MessageAttachment[] }) {
+  if (attachments.length === 0) return null
+  return (
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {attachments.map((a) =>
+        a.mimeType.startsWith('image/') ? (
+          <a
+            key={a.id}
+            href={attachmentSrc(a)}
+            target={a.url ? '_blank' : undefined}
+            rel={a.url ? 'noreferrer' : undefined}
+            className="block overflow-hidden rounded-lg border border-noc-border"
+          >
+            <img src={attachmentSrc(a)} alt={a.name} className="h-16 max-w-28 object-cover" />
+          </a>
+        ) : (
+          <a
+            key={a.id}
+            href={attachmentSrc(a)}
+            download={a.name}
+            target={a.url ? '_blank' : undefined}
+            rel={a.url ? 'noreferrer' : undefined}
+            className="flex items-center gap-1 rounded-lg border border-noc-border bg-noc-panel2 px-2 py-1 text-[10px] text-noc-t2"
+          >
+            <FileText className="h-3 w-3 text-noc-accent2" />
+            <span className="max-w-20 truncate">{a.name}</span>
+          </a>
+        ),
+      )}
+    </div>
+  )
+}
 
 interface IncidentThreadModalProps {
   incidentId: string | null
@@ -105,6 +138,7 @@ export default function IncidentThreadModal({
                   {m.id === incidentId && <span className="ms-2 font-bold text-red-400">פתיחת התקלה</span>}
                 </p>
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-noc-t1">{m.text}</p>
+                {m.attachments && <AttachmentStrip attachments={m.attachments} />}
               </div>
             </div>
           ))}
@@ -126,6 +160,7 @@ export default function IncidentThreadModal({
                   <span className="ms-2 font-bold text-noc-accent">עדכון מעמודת התקלות</span>
                 </p>
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-noc-t1">{t.text}</p>
+                {t.attachments && <AttachmentStrip attachments={t.attachments} />}
               </div>
             </div>
           ))}

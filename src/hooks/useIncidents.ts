@@ -38,7 +38,13 @@ export interface IncidentsApi {
     patch: Partial<Pick<IncidentItem, 'title' | 'description' | 'urgency' | 'attachments'>>,
   ) => void
   deleteIncident: (id: string) => void
-  addTimelineEntry: (id: string, text: string, operator: string, sourceMessageId?: string) => void
+  addTimelineEntry: (
+    id: string,
+    text: string,
+    operator: string,
+    sourceMessageId?: string,
+    attachments?: MessageAttachment[],
+  ) => void
   /** Remove the timeline entry that was created from a given chat message (used when that message is deleted) */
   removeTimelineEntryBySource: (id: string, sourceMessageId: string) => void
   resolveIncident: (id: string, resolution: IncidentResolution) => void
@@ -63,7 +69,12 @@ function docToIncident(id: string, data: DocumentData): IncidentItem {
   }
 }
 
-function makeTimelineEntry(text: string, operator: string, sourceMessageId?: string): IncidentTimelineEntry {
+function makeTimelineEntry(
+  text: string,
+  operator: string,
+  sourceMessageId?: string,
+  attachments?: MessageAttachment[],
+): IncidentTimelineEntry {
   const entry: IncidentTimelineEntry = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     text,
@@ -73,6 +84,7 @@ function makeTimelineEntry(text: string, operator: string, sourceMessageId?: str
   // Firestore rejects `undefined` field values, including inside array
   // elements — omit the key entirely rather than setting it to undefined
   if (sourceMessageId !== undefined) entry.sourceMessageId = sourceMessageId
+  if (attachments && attachments.length > 0) entry.attachments = attachments
   return entry
 }
 
@@ -135,12 +147,12 @@ function useFirestoreIncidents(): IncidentsApi {
   }, [])
 
   const addTimelineEntry = useCallback(
-    (id: string, text: string, operator: string, sourceMessageId?: string) => {
-      if (!db || !text.trim()) return
+    (id: string, text: string, operator: string, sourceMessageId?: string, attachments?: MessageAttachment[]) => {
+      if (!db || (!text.trim() && !(attachments && attachments.length > 0))) return
       const incident = incidents.find((i) => i.id === id)
       if (!incident) return
       updateDoc(doc(db, INCIDENTS_COLLECTION, id), {
-        timeline: [...incident.timeline, makeTimelineEntry(text.trim(), operator, sourceMessageId)],
+        timeline: [...incident.timeline, makeTimelineEntry(text.trim(), operator, sourceMessageId, attachments)],
       }).catch(() => {})
     },
     [incidents],
@@ -273,16 +285,22 @@ function useLocalIncidents(): IncidentsApi {
     setIncidents((prev) => prev.filter((i) => i.id !== id))
   }, [])
 
-  const addTimelineEntry = useCallback((id: string, text: string, operator: string, sourceMessageId?: string) => {
-    if (!text.trim()) return
-    setIncidents((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? { ...i, timeline: [...i.timeline, makeTimelineEntry(text.trim(), operator, sourceMessageId)] }
-          : i,
-      ),
-    )
-  }, [])
+  const addTimelineEntry = useCallback(
+    (id: string, text: string, operator: string, sourceMessageId?: string, attachments?: MessageAttachment[]) => {
+      if (!text.trim() && !(attachments && attachments.length > 0)) return
+      setIncidents((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                timeline: [...i.timeline, makeTimelineEntry(text.trim(), operator, sourceMessageId, attachments)],
+              }
+            : i,
+        ),
+      )
+    },
+    [],
+  )
 
   const removeTimelineEntryBySource = useCallback((id: string, sourceMessageId: string) => {
     setIncidents((prev) =>
