@@ -29,11 +29,28 @@ export interface Task {
   doneDates?: string[]
   createdAt: number
   assignee?: TaskAssignee
+  /** Manual sort position — falls back to createdAt when unset (see sortValue) */
+  order?: number
 }
 
 /** Whether the task counts as done for the given date. */
 export function isTaskDone(task: Task, dateKey: string): boolean {
   return task.recurring ? (task.doneDates ?? []).includes(dateKey) : task.done
+}
+
+/** Sort key for manual ordering — tasks without an explicit order sort by creation time. */
+function sortValue(task: Task): number {
+  return task.order ?? task.createdAt
+}
+
+/** New order value that sits between two neighboring tasks (either end may be open). */
+function computeOrder(before?: Task, after?: Task): number {
+  const beforeValue = before ? sortValue(before) : undefined
+  const afterValue = after ? sortValue(after) : undefined
+  if (beforeValue !== undefined && afterValue !== undefined) return (beforeValue + afterValue) / 2
+  if (beforeValue !== undefined) return beforeValue + 1000
+  if (afterValue !== undefined) return afterValue - 1000
+  return Date.now()
 }
 
 export interface NewTaskInput {
@@ -53,6 +70,8 @@ export interface TasksApi {
   /** Toggle done state; for recurring tasks the toggle applies to the given date only */
   toggleTask: (id: string, dateKey: string) => void
   deleteTask: (id: string) => void
+  /** Move a task to sit between beforeId and afterId (either may be omitted for start/end of list) */
+  reorderTask: (id: string, beforeId?: string, afterId?: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +89,7 @@ function docToTask(id: string, data: DocumentData): Task {
     doneDates: Array.isArray(data.done_dates) ? (data.done_dates as string[]) : undefined,
     createdAt: (data.created_at as number) ?? 0,
     assignee: (data.assignee as TaskAssignee | null) ?? undefined,
+    order: typeof data.order === 'number' ? (data.order as number) : undefined,
   }
 }
 
@@ -80,7 +100,7 @@ function useFirestoreTasks(): TasksApi {
     if (!db) return
     const unsub = onSnapshot(collection(db, TASKS_COLLECTION), (snapshot) => {
       const next = snapshot.docs.map((d) => docToTask(d.id, d.data()))
-      next.sort((a, b) => a.createdAt - b.createdAt)
+      next.sort((a, b) => sortValue(a) - sortValue(b))
       setTasks(next)
     })
     return unsub
@@ -134,9 +154,20 @@ function useFirestoreTasks(): TasksApi {
     deleteDoc(doc(db, TASKS_COLLECTION, id)).catch(() => {})
   }, [])
 
+  const reorderTask = useCallback(
+    (id: string, beforeId?: string, afterId?: string) => {
+      if (!db) return
+      const before = beforeId ? tasks.find((t) => t.id === beforeId) : undefined
+      const after = afterId ? tasks.find((t) => t.id === afterId) : undefined
+      const newOrder = computeOrder(before, after)
+      updateDoc(doc(db, TASKS_COLLECTION, id), { order: newOrder }).catch(() => {})
+    },
+    [tasks],
+  )
+
   return useMemo(
-    () => ({ tasks, addTask, updateTask, toggleTask, deleteTask }),
-    [tasks, addTask, updateTask, toggleTask, deleteTask],
+    () => ({ tasks, addTask, updateTask, toggleTask, deleteTask, reorderTask }),
+    [tasks, addTask, updateTask, toggleTask, deleteTask, reorderTask],
   )
 }
 
@@ -210,9 +241,18 @@ function useLocalTasks(): TasksApi {
     setTasks((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
+  const reorderTask = useCallback((id: string, beforeId?: string, afterId?: string) => {
+    setTasks((prev) => {
+      const before = beforeId ? prev.find((t) => t.id === beforeId) : undefined
+      const after = afterId ? prev.find((t) => t.id === afterId) : undefined
+      const newOrder = computeOrder(before, after)
+      return prev.map((t) => (t.id === id ? { ...t, order: newOrder } : t))
+    })
+  }, [])
+
   return useMemo(
-    () => ({ tasks, addTask, updateTask, toggleTask, deleteTask }),
-    [tasks, addTask, updateTask, toggleTask, deleteTask],
+    () => ({ tasks: [...tasks].sort((a, b) => sortValue(a) - sortValue(b)), addTask, updateTask, toggleTask, deleteTask, reorderTask }),
+    [tasks, addTask, updateTask, toggleTask, deleteTask, reorderTask],
   )
 }
 

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { DragEvent } from 'react'
 import {
   CalendarDays,
   Check,
@@ -10,6 +11,7 @@ import {
   Pencil,
   X,
   AlignCenter,
+  Move,
 } from 'lucide-react'
 import type { Task, TaskAssignee, TaskPatch } from '../hooks/useTasks'
 import { isTaskDone } from '../hooks/useTasks'
@@ -24,10 +26,12 @@ interface TaskRailProps {
   dateKey: string
   onToggle: (id: string) => void
   onUpdate: (id: string, patch: TaskPatch) => void
+  onReorder: (id: string, beforeId?: string, afterId?: string) => void
 }
 
 const ROTATIONS = ['-rotate-1', 'rotate-1', '-rotate-2', 'rotate-2']
 const STRAIGHT_KEY = 'noc-tasks-straight'
+const MOVABLE_KEY = 'noc-tasks-movable'
 
 function assigneeToValue(assignee?: TaskAssignee): string {
   if (!assignee) return ''
@@ -65,7 +69,7 @@ function colorForTask(id: string): (typeof NOTE_COLORS)[number] {
  * - date: dated tasks appear only on their scheduled date
  *   (undated tasks appear every day)
  */
-export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle, onUpdate }: TaskRailProps) {
+export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle, onUpdate, onReorder }: TaskRailProps) {
   const [leavingIds, setLeavingIds] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
   const [straight, setStraight] = useState(() => {
@@ -75,6 +79,15 @@ export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle,
       return false
     }
   })
+  const [movable, setMovable] = useState(() => {
+    try {
+      return window.localStorage.getItem(MOVABLE_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: 'before' | 'after' } | null>(null)
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const toggleStraight = () => {
@@ -87,6 +100,58 @@ export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle,
       }
       return next
     })
+  }
+
+  const toggleMovable = () => {
+    setMovable((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(MOVABLE_KEY, String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
+  const notes = tasks.filter(
+    (t) =>
+      !isTaskDone(t, dateKey) &&
+      (t.assignee?.kind !== 'shift' || t.assignee.shiftId === shiftId) &&
+      (!t.date || t.date === dateKey),
+  )
+
+  const resetDrag = () => {
+    setDragId(null)
+    setDropTarget(null)
+  }
+
+  const handleDragStart = (id: string) => (e: DragEvent<HTMLDivElement>) => {
+    setDragId(id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (id: string) => (e: DragEvent<HTMLDivElement>) => {
+    if (!dragId || dragId === id) return
+    e.preventDefault()
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pos = e.clientY - rect.top < rect.height / 2 ? 'before' : 'after'
+    setDropTarget((prev) => (prev?.id === id && prev.pos === pos ? prev : { id, pos }))
+  }
+
+  const handleDrop = (targetId: string) => (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const id = dragId
+    const target = dropTarget
+    resetDrag()
+    if (!id || id === targetId || !target) return
+    const visible = notes.filter((t) => t.id !== id)
+    const idx = visible.findIndex((t) => t.id === target.id)
+    if (idx === -1) return
+    const insertIdx = target.pos === 'before' ? idx : idx + 1
+    const beforeId = insertIdx > 0 ? visible[insertIdx - 1].id : undefined
+    const afterId = insertIdx < visible.length ? visible[insertIdx].id : undefined
+    onReorder(id, beforeId, afterId)
   }
 
   const handleDone = (id: string) => {
@@ -105,13 +170,6 @@ export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle,
     timers.current.set(id, t)
   }
 
-  const notes = tasks.filter(
-    (t) =>
-      !isTaskDone(t, dateKey) &&
-      (t.assignee?.kind !== 'shift' || t.assignee.shiftId === shiftId) &&
-      (!t.date || t.date === dateKey),
-  )
-
   return (
     <aside className="hidden w-56 shrink-0 flex-col overflow-hidden border-e border-noc-border bg-noc-panel/50 lg:flex">
       <div className="flex items-center gap-2 border-b border-noc-border px-3 py-2.5">
@@ -123,9 +181,18 @@ export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle,
           </span>
         )}
         <button
+          onClick={toggleMovable}
+          title={movable ? 'כיבוי מצב הזזה' : 'הזזת פתקיות וסידור לפי רצון'}
+          className={`ms-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+            movable ? 'bg-noc-accent/20 text-noc-accent' : 'text-noc-t4 hover:bg-noc-panel3 hover:text-noc-t2'
+          }`}
+        >
+          <Move className="h-3.5 w-3.5" />
+        </button>
+        <button
           onClick={toggleStraight}
           title={straight ? 'החזרת נטיית הפתקיות' : 'יישור הפתקיות'}
-          className={`ms-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${
             straight ? 'bg-noc-accent/20 text-noc-accent' : 'text-noc-t4 hover:bg-noc-panel3 hover:text-noc-t2'
           }`}
         >
@@ -160,9 +227,22 @@ export default function TaskRail({ tasks, operators, shiftId, dateKey, onToggle,
             return (
               <div
                 key={task.id}
+                draggable={movable}
+                onDragStart={movable ? handleDragStart(task.id) : undefined}
+                onDragOver={movable ? handleDragOver(task.id) : undefined}
+                onDrop={movable ? handleDrop(task.id) : undefined}
+                onDragEnd={movable ? resetDrag : undefined}
                 className={`group/note relative ${rotation} rounded-sm ${color.bg} p-2.5 ${color.text} shadow-lg shadow-black/30 transition-transform ${
                   straight ? '' : 'hover:rotate-0'
-                } ${leavingIds.has(task.id) ? 'note-leaving' : ''}`}
+                } ${leavingIds.has(task.id) ? 'note-leaving' : ''} ${movable ? 'cursor-grab active:cursor-grabbing' : ''} ${
+                  dragId === task.id ? 'opacity-40' : ''
+                } ${
+                  dropTarget?.id === task.id && dropTarget.pos === 'before'
+                    ? 'border-t-2 border-noc-accent'
+                    : dropTarget?.id === task.id && dropTarget.pos === 'after'
+                      ? 'border-b-2 border-noc-accent'
+                      : ''
+                }`}
               >
                 <div className="mb-1.5 flex items-center justify-between gap-1">
                   <div className="flex flex-wrap items-center gap-1">

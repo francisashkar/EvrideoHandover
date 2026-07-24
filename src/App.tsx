@@ -81,7 +81,7 @@ function App() {
   } = useChatStore(dateKey)
   const { operators, addOperator, renameOperator, deleteOperator } = useOperators()
   const { theme, toggleTheme } = useTheme()
-  const { tasks, addTask, updateTask, toggleTask, deleteTask } = useTasks()
+  const { tasks, addTask, updateTask, toggleTask, deleteTask, reorderTask } = useTasks()
   const { state: authState, signIn, signOut } = useAuth()
   const contactsApi = useContacts()
   const runbookApi = useRunbook()
@@ -388,6 +388,7 @@ function App() {
           dateKey={dateKey}
           onToggle={(id) => toggleTask(id, dateKey)}
           onUpdate={updateTask}
+          onReorder={reorderTask}
         />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
